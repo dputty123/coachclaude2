@@ -1,5 +1,143 @@
 # Coach Claude Insights - Development Guidelines
 
+## Product Specification
+
+For complete product specifications, features, and user workflows, please refer to:
+**[Coach Claude: Product Specification Document](./Coach%20Claude_%20Product%20Specification%20Document.md)**
+
+This document contains:
+- Problem statement and solution overview
+- Detailed feature specifications
+- User journey and workflows
+- Technical implementation details
+- Success criteria and investment information
+
+## Implementation Roadmap
+
+**IMPORTANT**: This roadmap should be updated whenever we deviate from the plan or make implementation decisions that differ from what's outlined below.
+
+### Phase 1: Foundation (Week 1)
+
+**1. Database Schema & Prisma Setup**
+- Install Prisma and configure with Supabase PostgreSQL
+- Create comprehensive schema:
+  - `User` (id, email, name, createdAt)
+  - `Client` (id, userId, name, company, role, bio, goals, challenges)
+  - `Session` (id, clientId, date, transcript, summary, actionItems, followUpEmail)
+  - `Resource` (id, title, url, type, content, tags)
+  - `ClientResource` (junction table for many-to-many)
+  - `ApiKey` (id, userId, service, encryptedKey)
+  - `Prompt` (id, userId, type, content, isDefault)
+
+**2. Supabase Configuration**
+- Set up Supabase project
+- Configure authentication (email/password)
+- Set up Row Level Security (RLS) policies
+- Configure storage buckets for file uploads
+
+**3. Authentication Implementation**
+- Create auth context and providers
+- Build login/signup pages
+- Implement protected route middleware
+- Add user session management
+
+### Phase 2: Core Features (Week 2)
+
+**4. Settings Page (Start Here!)**
+- This is the logical first page since users need API keys
+- Implement API key management (Claude, Google Calendar)
+- Add coaching philosophy prompt configuration
+- Create prompt templates management
+
+**5. Clients Module**
+- `/clients` - List view with client cards
+- `/clients/new` - Add new client form
+- `/clients/[id]` - Client detail page
+- CRUD operations with Prisma/Supabase
+
+**6. Sessions Foundation**
+- `/sessions` - Sessions list view
+- `/sessions/new` - Create session (select client)
+- `/sessions/[id]` - Session detail view
+- Basic CRUD without AI features yet
+
+### Phase 3: AI Integration (Week 3)
+
+**7. Google Calendar Integration**
+- OAuth flow for Google Calendar
+- Sync upcoming sessions
+- Filter by coaching keywords
+- Auto-create session records
+
+**8. AI Analysis Features**
+- Claude API integration
+- Session preparation insights
+- Post-session analysis
+- Action items extraction
+- Follow-up email generation
+- Resource recommendations
+
+### Phase 4: Advanced Features (Week 4)
+
+**9. Resources Management**
+- `/resources` - Resource library
+- Upload and categorize resources
+- Client-specific resource assignment
+- AI-powered resource discovery
+
+**10. Dashboard Completion**
+- Wire up real data to dashboard cards
+- Client metrics calculations
+- Recent activity feed
+- Upcoming sessions widget
+
+### Technical Implementation Order
+
+```
+1. Backend Setup
+   ├── Prisma schema
+   ├── Supabase config
+   └── tRPC routes setup
+
+2. Auth Flow
+   ├── Login/Signup pages
+   ├── Auth context
+   └── Protected routes
+
+3. Settings (First functional page!)
+   ├── API keys CRUD
+   └── Prompt management
+
+4. Clients
+   ├── List → Add → Edit → Delete
+   └── Client profiles
+
+5. Sessions
+   ├── Basic CRUD
+   ├── Calendar sync
+   └── AI analysis
+
+6. Resources
+   └── Complete the loop
+```
+
+### Why This Order?
+
+1. **Foundation First**: Database and auth are prerequisites
+2. **Settings Before Features**: Users need API keys configured
+3. **Clients Before Sessions**: Sessions belong to clients
+4. **Basic CRUD Before AI**: Get data flow working first
+5. **AI Features Together**: Better to implement all AI at once
+6. **Dashboard Last**: Needs all data to be meaningful
+
+### Next Immediate Steps
+
+1. **Install Prisma**: `npm install prisma @prisma/client`
+2. **Initialize Prisma**: `npx prisma init`
+3. **Create schema.prisma** with all models
+4. **Set up Supabase** project and get connection string
+5. **Run migrations**: `npx prisma migrate dev`
+
 ## Tech Stack
 
 ### Core Framework
