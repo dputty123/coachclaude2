@@ -13,7 +13,6 @@ import {
   FileText,
   User,
   Settings,
-  PlusCircle,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -33,11 +32,6 @@ const navItems = [
     title: 'Sessions',
     href: '/sessions',
     icon: MessageSquare,
-  },
-  {
-    title: 'New Session',
-    href: '/new-session',
-    icon: PlusCircle,
   },
   {
     title: 'Resources',
