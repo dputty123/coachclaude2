@@ -20,14 +20,7 @@ This document contains:
 
 **1. Database Schema & Prisma Setup**
 - Install Prisma and configure with Supabase PostgreSQL
-- Create comprehensive schema:
-  - `User` (id, email, name, createdAt)
-  - `Client` (id, userId, name, company, role, bio, goals, challenges)
-  - `Session` (id, clientId, date, transcript, summary, actionItems, followUpEmail)
-  - `Resource` (id, title, url, type, content, tags)
-  - `ClientResource` (junction table for many-to-many)
-  - `ApiKey` (id, userId, service, encryptedKey)
-  - `Prompt` (id, userId, type, content, isDefault)
+- Create comprehensive schema (see details below)
 
 **2. Supabase Configuration**
 - Set up Supabase project
@@ -137,6 +130,244 @@ This document contains:
 3. **Create schema.prisma** with all models
 4. **Set up Supabase** project and get connection string
 5. **Run migrations**: `npx prisma migrate dev`
+
+## Database Schema Design
+
+### Client Schema Key Features
+
+The Client schema has been carefully designed to handle the complex relationships between coaches and their clients:
+
+1. **Basic Information**
+   - Standard fields: name, role, company, email, phone, birthday
+   - `coachingSince` is optional - coaches may not remember exact start dates
+   - All clients belong to a specific coach (userId)
+
+2. **Custom Fields**
+   - `careerGoal` - Client's career aspirations
+   - `keyChallenge` - Main challenge they're working on
+   - `keyStakeholders` - Text field for roles like "CEO, CTO, Sales Director"
+
+3. **Organizational Relationships**
+   - **Reports To**: Unidirectional relationship using simple foreign key
+     - `reportsToId` links to another client who is their manager
+     - `directReports` automatically gives you all subordinates
+   - **Team Members**: Bidirectional relationship using join table
+     - Uses `TeamMembership` table to handle many-to-many relationships
+     - When A adds B as team member, B automatically sees A in their team
+
+4. **Related Data**
+   - **Notes**: Multiple timestamped notes per client (ClientNote table)
+   - **Resources**: AI-suggested or manually added resources linked to clients
+   - **Sessions**: All coaching sessions with this client
+
+### Implementation Notes
+
+- All relationships stay within a coach's client roster (enforced by userId)
+- Cascade deletes ensure data integrity when removing clients
+- Timestamp fields track when records are created and updated
+- The schema avoids complex self-referencing many-to-many relations in favor of cleaner join tables
+
+### Example Usage
+
+```typescript
+// Adding a team member relationship
+await prisma.teamMembership.create({
+  data: {
+    teamId: clientA.id,
+    memberId: clientB.id
+  }
+});
+
+// Finding all team members for a client
+const client = await prisma.client.findUnique({
+  where: { id: clientId },
+  include: {
+    teamMembers: { include: { member: true } },
+    memberOf: { include: { team: true } }
+  }
+});
+```
+### Calendar Integration Approach (MVP)
+
+**Phase 1 - Read-Only Integration:**
+1. Coach connects Google Calendar via OAuth
+2. System displays all upcoming calendar events
+3. Auto-detection: Events containing existing client names are flagged
+4. Coach manually confirms which events are coaching sessions
+5. Confirmed sessions pre-populate: date, title, client link
+
+**Why This Approach:**
+- Simple MVP implementation
+- No complex filtering logic needed initially
+- Coaches maintain control over session identification
+- Supports gradual adoption (can work without calendar)
+
+**Future Enhancements:**
+- Event filtering by keywords/labels
+- Two-way sync (create calendar events)
+- Automatic session creation rules
+
+## Tag System Architecture
+
+### Implementation Strategy
+
+1. **Single Tag Table**: One table for all tag types with category field
+2. **Pre-defined Tags Only**: ~20-30 curated coaching-relevant tags
+3. **AI Selection Only**: AI selects from existing tags, cannot create new ones
+
+### Example Tags
+
+```typescript
+const COACHING_TAGS = [
+  // Leadership & Management
+  "leadership", "delegation", "team-building", "decision-making",
+  
+  // Career Development
+  "career-growth", "goal-setting", "performance", "promotion",
+  
+  // Communication
+  "communication", "presentation", "conflict-resolution", "feedback",
+  
+  // Personal Development
+  "confidence", "work-life-balance", "stress-management", "mindset",
+  
+  // Strategy & Planning
+  "strategy", "planning", "vision", "change-management"
+];
+```
+
+### Benefits
+- Prevents tag explosion and inconsistency
+- Enables meaningful filtering and analytics
+- Maintains quality of AI categorization
+
+## Session Workflow
+
+### Pre-Session Flow (Preparation)
+
+1. **Trigger**: Coach views upcoming session (calendar or manual)
+2. **Action**: Clicks "Prepare" button
+3. **AI Process**:
+   - Analyzes all previous sessions with client
+   - Reviews client profile and notes
+   - Generates preparation insights
+4. **Output**: Preparation notes with context and suggested talking points
+
+### Post-Session Flow (Analysis)
+
+1. **Create/Select Session**: Coach creates new session or selects from calendar
+2. **Upload Transcript**: Paste or upload session notes/transcript
+3. **AI Analysis**:
+   - **Always Generated**:
+     - Summary: Concise overview of session
+     - Follow-up Email: Draft for client
+   - **Custom Analysis**: Based on coach's prompts
+4. **Resource Discovery**:
+   - AI analyzes session content
+   - Suggests relevant resources
+   - Links resources to both client and session
+5. **Tag Assignment**: AI selects relevant tags from predefined list
+
+### Data Flow Example
+
+```typescript
+// Post-session processing
+async function processSession(sessionId: string, transcript: string) {
+  // 1. Generate standard outputs
+  const summary = await generateSummary(transcript);
+  const followUpEmail = await generateFollowUp(transcript);
+  
+  // 2. Run custom analysis based on coach's prompts
+  const analysis = await runCustomAnalysis(transcript, coach.prompts);
+  
+  // 3. Assign tags from predefined list
+  const tags = await selectRelevantTags(transcript, COACHING_TAGS);
+  
+  // 4. Discover and suggest resources
+  const resources = await discoverResources(transcript);
+  
+  // 5. Update session with all generated content
+  await updateSession(sessionId, {
+    summary,
+    followUpEmail,
+    analysis,
+    tags,
+    resources
+  });
+}
+```
+
+## Settings Architecture
+
+### API Configuration Strategy
+
+API keys and configuration are stored directly in the User model for MVP simplicity:
+
+1. **Claude API Configuration**
+   - `claudeApiKey`: Encrypted API key storage
+   - `claudeModel`: User's preferred model (defaults to claude-3-sonnet)
+   - Automatic fallback handled by Claude API (Opus → Sonnet)
+
+2. **Google Calendar Integration**
+   - `googleRefreshToken`: OAuth refresh token for persistent access
+   - Enables calendar sync without repeated authentication
+
+### Prompt Management System
+
+Two-tier prompt system for flexibility:
+
+1. **Active Prompts** (in User model)
+   - `analysisPrompt`: Currently active prompt for post-session analysis
+   - `preparationPrompt`: Currently active prompt for pre-session preparation
+   - Stored as text, can be edited directly
+
+2. **Prompt Templates** (PromptTemplate model)
+   - Library of saved prompts
+   - Types: "analysis" or "preparation"
+   - `isDefault`: Marks system-provided templates
+   - Users can create custom templates
+
+### Workflow Example
+
+```typescript
+// Using a template
+async function applyTemplate(templateId: string) {
+  const template = await prisma.promptTemplate.findUnique({
+    where: { id: templateId }
+  });
+  
+  // Copy template content to active prompt
+  if (template.type === 'analysis') {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { analysisPrompt: template.content }
+    });
+  }
+}
+
+// Default templates created on signup
+const defaultTemplates = [
+  {
+    name: "Standard Analysis",
+    type: "analysis",
+    content: "Analyze this coaching session...",
+    isDefault: true
+  },
+  {
+    name: "Session Preparation",
+    type: "preparation", 
+    content: "Prepare for upcoming session...",
+    isDefault: true
+  }
+];
+```
+
+### Security Considerations
+
+- API keys must be encrypted before storage
+- Use environment variables for encryption keys
+- Never expose raw API keys in responses
+- Implement proper key rotation mechanisms
 
 ## Tech Stack
 

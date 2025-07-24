@@ -1,0 +1,219 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - represents coaches using the platform
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  name               String?
+  
+  // API Configuration
+  claudeApiKey       String?  // Encrypted
+  claudeModel        String?  @default("claude-3-sonnet-20240229")
+  googleRefreshToken String?  // For Google OAuth
+  
+  // Active Prompts
+  analysisPrompt     String?  @db.Text
+  preparationPrompt  String?  @db.Text
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  // Relations
+  clients            Client[]
+  sessions           Session[]
+  promptTemplates    PromptTemplate[]
+}
+
+// Client model - represents people that coaches work with
+model Client {
+  id               String    @id @default(cuid())
+  userId           String    // The coach who owns this client
+  
+  // Basic Information
+  name             String
+  role             String?
+  company          String?
+  email            String?
+  phone            String?
+  birthday         DateTime?
+  coachingSince    DateTime? // Optional - coach may not remember exact date
+  
+  // Custom Fields
+  careerGoal       String?
+  keyChallenge     String?
+  keyStakeholders  String?   // Simple text field for "CEO, CTO, Sales Director"
+  
+  // Timestamps
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  // Relations
+  user             User      @relation(fields: [userId], references: [id])
+  sessions         Session[]
+  notes            ClientNote[]
+  resources        ClientResource[]
+  
+  // Reports To (unidirectional)
+  reportsToId      String?
+  reportsTo        Client?   @relation("ReportsTo", fields: [reportsToId], references: [id])
+  directReports    Client[]  @relation("ReportsTo")
+  
+  // Team Members (bidirectional via join table)
+  teamMembers      TeamMembership[] @relation("TeamMember")
+  memberOf         TeamMembership[] @relation("MemberOf")
+}
+
+// TeamMembership - join table for bidirectional team relationships
+model TeamMembership {
+  id          String   @id @default(cuid())
+  memberId    String
+  teamId      String
+  createdAt   DateTime @default(now())
+  
+  member      Client   @relation("TeamMember", fields: [memberId], references: [id], onDelete: Cascade)
+  team        Client   @relation("MemberOf", fields: [teamId], references: [id], onDelete: Cascade)
+  
+  @@unique([memberId, teamId])
+}
+
+// ClientNote - multiple notes per client with timestamps
+model ClientNote {
+  id         String   @id @default(cuid())
+  clientId   String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+// ClientResource - tracks resources suggested for specific clients
+model ClientResource {
+  id           String   @id @default(cuid())
+  clientId     String
+  resourceId   String
+  sessionId    String?  // Which session triggered this suggestion (optional)
+  suggestedAt  DateTime @default(now())
+  suggestedBy  String   // "ai" or "manual"
+  reason       String?  // Why this resource was suggested
+  
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  resource     Resource @relation(fields: [resourceId], references: [id])
+  session      Session? @relation(fields: [sessionId], references: [id])
+}
+
+// Session model - represents coaching sessions
+model Session {
+  id               String    @id @default(cuid())
+  clientId         String
+  userId           String    // The coach who owns this session
+  
+  // Basic Information
+  title            String
+  date             DateTime? // Optional - coach may not remember/have it
+  
+  // Content
+  transcript       String?   @db.Text
+  
+  // AI Generated - Always
+  summary          String?   @db.Text
+  followUpEmail    String?   @db.Text
+  
+  // AI Generated - Flexible
+  analysis         String?   @db.Text // Based on coach's prompts
+  preparationNotes String?   @db.Text // Only for future sessions
+  
+  // Calendar Link
+  calendarEventId  String?   // If linked to Google Calendar
+  
+  // Timestamps
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  // Relations
+  client           Client    @relation(fields: [clientId], references: [id])
+  user             User      @relation(fields: [userId], references: [id])
+  tags             SessionTag[]
+  resources        ClientResource[] // Resources suggested from this session
+}
+
+// Tag model - for categorizing sessions and resources
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  category  String   @default("session") // "session", "resource", etc.
+  createdAt DateTime @default(now())
+  
+  // Relations
+  sessions  SessionTag[]
+  resources ResourceTag[]
+}
+
+// SessionTag - junction table for many-to-many session-tag relationship
+model SessionTag {
+  id        String   @id @default(cuid())
+  sessionId String
+  tagId     String
+  
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id])
+  
+  @@unique([sessionId, tagId])
+}
+
+// Resource model - coaching resources, articles, frameworks, etc.
+model Resource {
+  id              String           @id @default(cuid())
+  title           String
+  url             String?
+  type            String           // "article", "framework", "tool", "book", etc.
+  content         String?          @db.Text
+  description     String?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relations
+  clientResources ClientResource[]
+  tags            ResourceTag[]
+}
+
+// ResourceTag - junction table for resource tags
+model ResourceTag {
+  id         String   @id @default(cuid())
+  resourceId String
+  tagId      String
+  
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id])
+  
+  @@unique([resourceId, tagId])
+}
+
+// PromptTemplate - saved prompt templates for analysis and preparation
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   // "Executive Leadership Focus", "Career Transition", etc.
+  type        String   // "analysis" or "preparation"
+  content     String   @db.Text
+  isDefault   Boolean  @default(false) // System-provided templates
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
