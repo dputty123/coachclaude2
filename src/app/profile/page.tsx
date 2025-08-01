@@ -4,19 +4,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ProfilePage() {
   const [name, setName] = useState<string>("Coach User");
   const [email, setEmail] = useState<string>("coach@example.com");
   const [timeZone, setTimeZone] = useState<string>("America/New_York");
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const supabase = createClient();
 
   const handleSave = () => {
     // This would connect to Supabase in the real implementation
     toast.success("Profile updated successfully!");
     setIsEditing(false);
+  };
+
+  const handleSignOut = async () => {
+    // Navigate immediately to prevent flash
+    window.location.href = "/auth";
+    // Sign out in the background (the redirect will happen before this completes)
+    await supabase.auth.signOut();
   };
 
   return (
@@ -86,9 +106,30 @@ export default function ProfilePage() {
                   </Button>
                 </div>
               ) : (
-                <Button onClick={() => setIsEditing(true)}>
-                  Edit Profile
-                </Button>
+                <div className="flex space-x-2">
+                  <Button onClick={() => setIsEditing(true)}>
+                    Edit Profile
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive">Sign Out</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          You will be redirected to the login page and will need to sign in again to access your account.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleSignOut}>
+                          Sign Out
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               )}
             </div>
           </CardContent>

@@ -369,6 +369,38 @@ const defaultTemplates = [
 - Never expose raw API keys in responses
 - Implement proper key rotation mechanisms
 
+### API Key Security
+
+- All API keys (Claude, Google) are encrypted using AES-256-GCM before storage
+- Encryption key must be set in ENCRYPTION_KEY environment variable
+- Keys are decrypted only when needed for API calls
+- Never log or expose decrypted keys
+- When implementing the settings page or any feature that stores/uses API keys, just:
+  - encrypt(apiKey) before saving to database
+  - decrypt(encryptedKey) when you need to use it with APIs
+
+## Design System & Theming
+
+### globals.css - Single Source of Truth
+
+The `src/app/globals.css` file contains all design tokens and theme variables:
+
+1. **Color System**: All colors use CSS custom properties (variables)
+   - Primary: `--primary: 221.2 83.2% 53.3%` (HSL format)
+   - Supports light/dark themes automatically
+   - Components should use `hsl(var(--primary))` syntax
+
+2. **Component Styling**: Always use CSS variables from globals.css
+   - Never hardcode colors
+   - Ensures consistency across the app
+   - Theme changes automatically apply everywhere
+
+3. **Key Variables**:
+   - `--background`, `--foreground`: Main app colors
+   - `--primary`, `--secondary`: Brand colors
+   - `--muted`, `--accent`: UI state colors
+   - `--sidebar-*`: Sidebar-specific theming
+
 ## Tech Stack
 
 ### Core Framework
