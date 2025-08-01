@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  eslint: {
+    // Ignore these directories during production builds
+    ignoreDuringBuilds: false, // Keep linting enabled
+    dirs: ['src/app', 'src/components', 'src/lib'], // Only lint these directories
+  },
 };
 
 export default nextConfig;

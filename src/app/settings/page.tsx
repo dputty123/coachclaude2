@@ -41,7 +41,7 @@ export default function SettingsPage() {
     } else {
       setLastSavedPrompt(systemPrompt);
     }
-  }, []);
+  }, [systemPrompt]);
 
   const handleSaveApiKey = () => {
     if (!apiKey.trim()) {
@@ -107,7 +107,7 @@ export default function SettingsPage() {
                   <Button onClick={handleSaveApiKey}>Save Key</Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Your API key is stored securely and is used to access Claude's services.
+                  Your API key is stored securely and is used to access Claude&apos;s services.
                   {isApiKeySaved && " Your API key has been saved."}
                 </p>
               </div>

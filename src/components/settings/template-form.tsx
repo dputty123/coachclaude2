@@ -87,7 +87,7 @@ export const TemplateForm = ({
                   placeholder="Enter system prompt here..."
                 />
                 <p className="text-xs text-muted-foreground">
-                  This defines Claude's persona and how it should approach the analysis
+                  This defines Claude&apos;s persona and how it should approach the analysis
                 </p>
               </div>
               
