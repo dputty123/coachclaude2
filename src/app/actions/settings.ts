@@ -30,9 +30,17 @@ export async function getUserSettings() {
 
     // Decrypt API key for display (masked)
     const decryptedApiKey = safeDecrypt(settings.claudeApiKey)
-    const maskedApiKey = decryptedApiKey 
-      ? `${decryptedApiKey.slice(0, 7)}...${decryptedApiKey.slice(-4)}`
-      : null
+    let maskedApiKey = null
+    
+    if (decryptedApiKey) {
+      // For short keys, just show partial
+      if (decryptedApiKey.length <= 10) {
+        maskedApiKey = `${decryptedApiKey.slice(0, 3)}...`
+      } else {
+        // For longer keys, show beginning and end
+        maskedApiKey = `${decryptedApiKey.slice(0, 7)}...${decryptedApiKey.slice(-4)}`
+      }
+    }
 
     return {
       success: true,

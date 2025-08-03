@@ -26,6 +26,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState<string>("");
   const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [savedApiKey, setSavedApiKey] = useState<string>(""); // Store the masked key separately
+  const [isEditingApiKey, setIsEditingApiKey] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_CLAUDE_MODEL);
   const [analysisPrompt, setAnalysisPrompt] = useState<string>("");
   const [preparationPrompt, setPreparationPrompt] = useState<string>("");
@@ -39,6 +41,9 @@ export default function SettingsPage() {
       const result = await getUserSettings();
       if (result.success && result.data) {
         setHasApiKey(result.data.hasApiKey || false);
+        if (result.data.claudeApiKey) {
+          setSavedApiKey(result.data.claudeApiKey); // Store masked key separately
+        }
         setSelectedModel(result.data.claudeModel || DEFAULT_CLAUDE_MODEL);
         setAnalysisPrompt(result.data.analysisPrompt || "");
         setPreparationPrompt(result.data.preparationPrompt || "");
@@ -60,8 +65,16 @@ export default function SettingsPage() {
     const result = await updateApiConfiguration(apiKey, selectedModel);
     
     if (result.success) {
-      setHasApiKey(true);
-      setApiKey(""); // Clear the input after saving
+      // Reload settings to get the masked API key
+      const settingsResult = await getUserSettings();
+      if (settingsResult.success && settingsResult.data) {
+        setHasApiKey(true);
+        if (settingsResult.data.claudeApiKey) {
+          setSavedApiKey(settingsResult.data.claudeApiKey);
+          setApiKey(""); // Clear the input
+          setIsEditingApiKey(false);
+        }
+      }
       toast.success("API configuration saved successfully");
     } else {
       toast.error(result.error || "Failed to save API configuration");
@@ -141,28 +154,61 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label htmlFor="api-key">Claude API Key</Label>
                 <div className="flex space-x-2">
-                  <Input
-                    id="api-key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter your Claude API key"
-                    className="flex-1"
-                  />
-                  <Button onClick={handleSaveApiKey} disabled={savingApi}>
-                    {savingApi ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Configuration'
-                    )}
-                  </Button>
+                  {hasApiKey && !isEditingApiKey ? (
+                    <>
+                      <Input
+                        id="api-key"
+                        type="text"
+                        value={savedApiKey}
+                        disabled
+                        className="flex-1"
+                      />
+                      <Button 
+                        onClick={() => {
+                          setIsEditingApiKey(true);
+                          setApiKey("");
+                        }}
+                        variant="outline"
+                      >
+                        Update
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        id="api-key"
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder="Enter your Claude API key"
+                        className="flex-1"
+                      />
+                      <Button onClick={handleSaveApiKey} disabled={savingApi}>
+                        {savingApi ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Key'
+                        )}
+                      </Button>
+                      {isEditingApiKey && (
+                        <Button 
+                          onClick={() => {
+                            setIsEditingApiKey(false);
+                            setApiKey("");
+                          }}
+                          variant="outline"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Your API key is stored securely and is used to access Claude&apos;s services.
-                  {hasApiKey && " API key is configured."}
                 </p>
               </div>
               
