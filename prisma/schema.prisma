@@ -22,7 +22,7 @@ model User {
   
   // API Configuration
   claudeApiKey       String?  // Encrypted
-  claudeModel        String?  @default("claude-3-sonnet-20240229")
+  claudeModel        String?  @default("claude-opus-4-20250514")
   googleRefreshToken String?  // For Google OAuth
   
   // Active Prompts
