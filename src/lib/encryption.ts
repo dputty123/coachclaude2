@@ -29,3 +29,14 @@ export function decrypt(encryptedData: string): string {
   
   return decrypted
 }
+
+// Safe decrypt that returns null instead of throwing
+export function safeDecrypt(encryptedData: string | null): string | null {
+  if (!encryptedData) return null
+  
+  try {
+    return decrypt(encryptedData)
+  } catch {
+    return null
+  }
+}

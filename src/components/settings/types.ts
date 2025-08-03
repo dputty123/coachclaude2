@@ -1,7 +1,9 @@
 export interface PromptTemplate {
   id: string;
   name: string;
-  description: string;
-  systemPrompt: string;
-  userPrompt: string;
+  type: 'analysis' | 'preparation';
+  content: string;
+  isDefault: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

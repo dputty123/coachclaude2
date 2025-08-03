@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PromptTemplate } from "./types";
+import { Loader2 } from "lucide-react";
 
 interface TemplateFormProps {
   activeTemplate: PromptTemplate | null;
@@ -14,6 +16,7 @@ interface TemplateFormProps {
   onSaveTemplate: () => void;
   onCancelEdit: () => void;
   onStartEdit: () => void;
+  saving?: boolean;
 }
 
 export const TemplateForm = ({
@@ -23,6 +26,7 @@ export const TemplateForm = ({
   onSaveTemplate,
   onCancelEdit,
   onStartEdit,
+  saving,
 }: TemplateFormProps) => {
   if (!activeTemplate) {
     return (
@@ -63,58 +67,59 @@ export const TemplateForm = ({
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="template-description">Description</Label>
-                <Input
-                  id="template-description"
-                  value={activeTemplate.description}
-                  onChange={(e) => onEditTemplate({
+                <Label htmlFor="template-type">Template Type</Label>
+                <Select
+                  value={activeTemplate.type}
+                  onValueChange={(value: 'analysis' | 'preparation') => onEditTemplate({
                     ...activeTemplate,
-                    description: e.target.value
+                    type: value
                   })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="system-prompt">System Prompt</Label>
-                <Textarea
-                  id="system-prompt"
-                  rows={5}
-                  value={activeTemplate.systemPrompt}
-                  onChange={(e) => onEditTemplate({
-                    ...activeTemplate,
-                    systemPrompt: e.target.value
-                  })}
-                  placeholder="Enter system prompt here..."
-                />
+                >
+                  <SelectTrigger id="template-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="analysis">Analysis</SelectItem>
+                    <SelectItem value="preparation">Preparation</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
-                  This defines Claude&apos;s persona and how it should approach the analysis
+                  Choose whether this template is for post-session analysis or pre-session preparation
                 </p>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="user-prompt">User Prompt Template</Label>
+                <Label htmlFor="template-content">Template Content</Label>
                 <Textarea
-                  id="user-prompt"
-                  rows={8}
-                  value={activeTemplate.userPrompt}
+                  id="template-content"
+                  rows={12}
+                  value={activeTemplate.content}
                   onChange={(e) => onEditTemplate({
                     ...activeTemplate,
-                    userPrompt: e.target.value
+                    content: e.target.value
                   })}
-                  placeholder="Enter user prompt template here..."
+                  placeholder="Enter your prompt template here..."
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use {"{{transcript}}"} as placeholder for the session transcript
+                  This prompt will guide Claude in analyzing sessions or preparing for upcoming meetings
                 </p>
               </div>
               
               <div className="flex space-x-2 pt-4">
-                <Button onClick={onSaveTemplate}>
-                  Save Template
+                <Button onClick={onSaveTemplate} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Template'
+                  )}
                 </Button>
                 <Button 
                   variant="outline" 
                   onClick={onCancelEdit}
+                  disabled={saving}
                 >
                   Cancel
                 </Button>
@@ -124,27 +129,20 @@ export const TemplateForm = ({
             <>
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-medium">Description</h4>
-                  <p className="text-muted-foreground">
-                    {activeTemplate.description}
+                  <h4 className="text-sm font-medium">Template Type</h4>
+                  <p className="text-muted-foreground capitalize">
+                    {activeTemplate.type}
                   </p>
                 </div>
                 
                 <div>
-                  <h4 className="text-sm font-medium">System Prompt</h4>
+                  <h4 className="text-sm font-medium">Template Content</h4>
                   <div className="p-3 bg-muted/30 rounded-md mt-1 whitespace-pre-wrap">
-                    {activeTemplate.systemPrompt}
+                    {activeTemplate.content}
                   </div>
                 </div>
                 
-                <div>
-                  <h4 className="text-sm font-medium">User Prompt Template</h4>
-                  <div className="p-3 bg-muted/30 rounded-md mt-1 whitespace-pre-wrap">
-                    {activeTemplate.userPrompt.replace(/\{\{transcript\}\}/g, "[TRANSCRIPT]")}
-                  </div>
-                </div>
-                
-                <Button onClick={onStartEdit}>
+                <Button onClick={onStartEdit} disabled={activeTemplate.id === 'new'}>
                   Edit Template
                 </Button>
               </div>

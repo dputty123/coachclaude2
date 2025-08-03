@@ -14,61 +14,107 @@ import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PromptTemplateEditor } from "@/components/settings/prompt-template-editor";
+import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "@/lib/constants/claude-models";
+import { 
+  getUserSettings, 
+  updateApiConfiguration, 
+  updateSystemPrompt 
+} from "@/app/actions/settings";
+import { Loader2 } from "lucide-react";
 
 export default function SettingsPage() {
+  const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState<string>("");
-  const [isApiKeySaved, setIsApiKeySaved] = useState<boolean>(false);
-  const [systemPrompt, setSystemPrompt] = useState<string>(
-    "You are Coach Claude, a master-level executive coaching supervisor with expertise in leadership development, emotional intelligence, and strategic decision-making. Your job is to analyze coaching session transcripts and provide structured, actionable insights that help coaches improve their practice and better serve their clients.\n\nWhen analyzing transcripts, consider:\n- The coach's questioning techniques and active listening skills\n- Client insights and breakthroughs\n- Emotional patterns and underlying themes\n- Opportunities for deeper exploration\n- Potential resources that might benefit the client\n- Follow-up strategies to reinforce learning"
-  );
-  const [isSystemPromptSaved, setIsSystemPromptSaved] = useState<boolean>(false);
-  const [lastSavedPrompt, setLastSavedPrompt] = useState<string>("");
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_CLAUDE_MODEL);
+  const [analysisPrompt, setAnalysisPrompt] = useState<string>("");
+  const [preparationPrompt, setPreparationPrompt] = useState<string>("");
+  const [lastSavedAnalysis, setLastSavedAnalysis] = useState<string>("");
+  const [lastSavedPreparation, setLastSavedPreparation] = useState<string>("");
+  const [savingApi, setSavingApi] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
 
   useEffect(() => {
-    // Load saved system prompt and API key from localStorage
-    const savedApiKey = localStorage.getItem("claudeApiKey");
-    const savedSystemPrompt = localStorage.getItem("systemPrompt");
-    
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
-      setIsApiKeySaved(true);
-    }
-    
-    if (savedSystemPrompt) {
-      setSystemPrompt(savedSystemPrompt);
-      setLastSavedPrompt(savedSystemPrompt);
-      setIsSystemPromptSaved(true);
-    } else {
-      setLastSavedPrompt(systemPrompt);
-    }
-  }, [systemPrompt]);
+    const loadSettings = async () => {
+      const result = await getUserSettings();
+      if (result.success && result.data) {
+        setHasApiKey(result.data.hasApiKey || false);
+        setSelectedModel(result.data.claudeModel || DEFAULT_CLAUDE_MODEL);
+        setAnalysisPrompt(result.data.analysisPrompt || "");
+        setPreparationPrompt(result.data.preparationPrompt || "");
+        setLastSavedAnalysis(result.data.analysisPrompt || "");
+        setLastSavedPreparation(result.data.preparationPrompt || "");
+      }
+      setLoading(false);
+    };
+    loadSettings();
+  }, []);
 
-  const handleSaveApiKey = () => {
+  const handleSaveApiKey = async () => {
     if (!apiKey.trim()) {
       toast.error("Please enter a valid API key");
       return;
     }
     
-    // In a real implementation, this would securely store the API key in Supabase
-    localStorage.setItem("claudeApiKey", apiKey);
-    setIsApiKeySaved(true);
-    toast.success("API key saved successfully");
+    setSavingApi(true);
+    const result = await updateApiConfiguration(apiKey, selectedModel);
+    
+    if (result.success) {
+      setHasApiKey(true);
+      setApiKey(""); // Clear the input after saving
+      toast.success("API configuration saved successfully");
+    } else {
+      toast.error(result.error || "Failed to save API configuration");
+    }
+    setSavingApi(false);
   };
 
-  const handleSaveSystemPrompt = () => {
-    if (!systemPrompt.trim()) {
-      toast.error("Please enter a system prompt");
+  const handleSaveAnalysisPrompt = async () => {
+    if (!analysisPrompt.trim()) {
+      toast.error("Please enter an analysis prompt");
       return;
     }
     
-    // In a real implementation, this would securely store the system prompt in Supabase
-    localStorage.setItem("systemPrompt", systemPrompt);
-    setLastSavedPrompt(systemPrompt);
-    setIsSystemPromptSaved(true);
-    toast.success("System prompt saved successfully");
+    setSavingPrompt(true);
+    const result = await updateSystemPrompt('analysis', analysisPrompt);
+    
+    if (result.success) {
+      setLastSavedAnalysis(analysisPrompt);
+      toast.success("Analysis prompt saved successfully");
+    } else {
+      toast.error(result.error || "Failed to save analysis prompt");
+    }
+    setSavingPrompt(false);
   };
 
-  const hasUnsavedChanges = systemPrompt !== lastSavedPrompt;
+  const handleSavePreparationPrompt = async () => {
+    if (!preparationPrompt.trim()) {
+      toast.error("Please enter a preparation prompt");
+      return;
+    }
+    
+    setSavingPrompt(true);
+    const result = await updateSystemPrompt('preparation', preparationPrompt);
+    
+    if (result.success) {
+      setLastSavedPreparation(preparationPrompt);
+      toast.success("Preparation prompt saved successfully");
+    } else {
+      toast.error(result.error || "Failed to save preparation prompt");
+    }
+    setSavingPrompt(false);
+  };
+
+  const hasUnsavedAnalysis = analysisPrompt !== lastSavedAnalysis;
+  const hasUnsavedPreparation = preparationPrompt !== lastSavedPreparation;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in">
@@ -82,9 +128,8 @@ export default function SettingsPage() {
       <Tabs defaultValue="api" className="space-y-6">
         <TabsList>
           <TabsTrigger value="api">API Configuration</TabsTrigger>
-          <TabsTrigger value="system-prompt">System Prompt</TabsTrigger>
+          <TabsTrigger value="system-prompt">System Prompts</TabsTrigger>
           <TabsTrigger value="templates">Prompt Templates</TabsTrigger>
-          <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
 
         <TabsContent value="api" className="space-y-6">
@@ -104,11 +149,20 @@ export default function SettingsPage() {
                     placeholder="Enter your Claude API key"
                     className="flex-1"
                   />
-                  <Button onClick={handleSaveApiKey}>Save Key</Button>
+                  <Button onClick={handleSaveApiKey} disabled={savingApi}>
+                    {savingApi ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Configuration'
+                    )}
+                  </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Your API key is stored securely and is used to access Claude&apos;s services.
-                  {isApiKeySaved && " Your API key has been saved."}
+                  {hasApiKey && " API key is configured."}
                 </p>
               </div>
               
@@ -117,11 +171,14 @@ export default function SettingsPage() {
                 <select 
                   id="api-model" 
                   className="w-full p-2 border rounded-md"
-                  defaultValue="claude-3-opus-20240229"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
                 >
-                  <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                  <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
-                  <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                  {CLAUDE_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-sm text-muted-foreground">
                   Select the Claude model to use for generating coaching insights.
@@ -132,85 +189,112 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="system-prompt" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>System-Level Prompt</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="system-prompt">Master Coaching Philosophy</Label>
-                <Textarea
-                  id="system-prompt"
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Enter your coaching philosophy, approaches, and methodologies..."
-                  className="min-h-[300px]"
-                />
-                <p className="text-sm text-muted-foreground">
-                  This system-level prompt will be applied to all analyses. It should capture your coaching 
-                  philosophy, methodologies, and the lens through which you want Claude to analyze sessions.
-                </p>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <div className="text-sm">
-                  {isSystemPromptSaved && !hasUnsavedChanges ? (
-                    <span className="text-green-600">System prompt is saved</span>
-                  ) : (
-                    <span className="text-amber-600">You have unsaved changes</span>
-                  )}
-                </div>
-                <Button 
-                  onClick={handleSaveSystemPrompt} 
-                  disabled={!hasUnsavedChanges}
-                >
-                  Save System Prompt
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <Tabs defaultValue="analysis" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="analysis">Analysis Prompt</TabsTrigger>
+              <TabsTrigger value="preparation">Preparation Prompt</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="analysis" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Post-Session Analysis Prompt</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="analysis-prompt">Analysis Guidelines</Label>
+                    <Textarea
+                      id="analysis-prompt"
+                      value={analysisPrompt}
+                      onChange={(e) => setAnalysisPrompt(e.target.value)}
+                      placeholder="Enter your analysis prompt..."
+                      className="min-h-[300px]"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This prompt guides how Claude analyzes coaching session transcripts, including summary, 
+                      insights, action items, and follow-up emails.
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm">
+                      {!hasUnsavedAnalysis ? (
+                        <span className="text-green-600">Analysis prompt is saved</span>
+                      ) : (
+                        <span className="text-amber-600">You have unsaved changes</span>
+                      )}
+                    </div>
+                    <Button 
+                      onClick={handleSaveAnalysisPrompt} 
+                      disabled={!hasUnsavedAnalysis || savingPrompt}
+                    >
+                      {savingPrompt ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Analysis Prompt'
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="preparation" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pre-Session Preparation Prompt</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="preparation-prompt">Preparation Guidelines</Label>
+                    <Textarea
+                      id="preparation-prompt"
+                      value={preparationPrompt}
+                      onChange={(e) => setPreparationPrompt(e.target.value)}
+                      placeholder="Enter your preparation prompt..."
+                      className="min-h-[300px]"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This prompt guides how Claude prepares you for upcoming coaching sessions based on 
+                      client history and previous sessions.
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm">
+                      {!hasUnsavedPreparation ? (
+                        <span className="text-green-600">Preparation prompt is saved</span>
+                      ) : (
+                        <span className="text-amber-600">You have unsaved changes</span>
+                      )}
+                    </div>
+                    <Button 
+                      onClick={handleSavePreparationPrompt} 
+                      disabled={!hasUnsavedPreparation || savingPrompt}
+                    >
+                      {savingPrompt ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Preparation Prompt'
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="templates">
           <PromptTemplateEditor />
         </TabsContent>
 
-        <TabsContent value="preferences">
-          <Card>
-            <CardHeader>
-              <CardTitle>Application Preferences</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="default-session-duration">
-                  Default Session Duration (minutes)
-                </Label>
-                <Input
-                  id="default-session-duration"
-                  type="number"
-                  defaultValue={60}
-                  min={15}
-                  step={15}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="theme">Theme</Label>
-                <select 
-                  id="theme" 
-                  className="w-full p-2 border rounded-md"
-                  defaultValue="light"
-                >
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                  <option value="system">System Default</option>
-                </select>
-              </div>
-              
-              <Button className="mt-4">Save Preferences</Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );
