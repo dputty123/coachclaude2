@@ -152,7 +152,8 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="api-key">Claude API Key</Label>
+                <Label htmlFor="claude-api-key-input">Claude API Key</Label>
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveApiKey(); }} autoComplete="off">
                 <div className="flex space-x-2">
                   {hasApiKey && !isEditingApiKey ? (
                     <>
@@ -176,12 +177,17 @@ export default function SettingsPage() {
                   ) : (
                     <>
                       <Input
-                        id="api-key"
+                        id="claude-api-key-input"
+                        name="claude-api-key"
                         type="password"
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
                         placeholder="Enter your Claude API key"
                         className="flex-1"
+                        autoComplete="new-password"
+                        data-lpignore="true"
+                        data-form-type="other"
+                        data-1p-ignore
                       />
                       <Button onClick={handleSaveApiKey} disabled={savingApi}>
                         {savingApi ? (
@@ -207,6 +213,7 @@ export default function SettingsPage() {
                     </>
                   )}
                 </div>
+                </form>
                 <p className="text-sm text-muted-foreground">
                   Your API key is stored securely and is used to access Claude&apos;s services.
                 </p>
@@ -218,7 +225,20 @@ export default function SettingsPage() {
                   id="api-model" 
                   className="w-full p-2 border rounded-md"
                   value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  onChange={async (e) => {
+                    const newModel = e.target.value;
+                    setSelectedModel(newModel);
+                    
+                    // Auto-save the model selection (even without API key)
+                    const result = await updateApiConfiguration(null, newModel);
+                    if (result.success) {
+                      toast.success("Model preference saved");
+                    } else {
+                      toast.error("Failed to update model");
+                      // Revert on failure
+                      setSelectedModel(selectedModel);
+                    }
+                  }}
                 >
                   {CLAUDE_MODELS.map((model) => (
                     <option key={model.value} value={model.value}>

@@ -56,7 +56,7 @@ export async function getUserSettings() {
   }
 }
 
-export async function updateApiConfiguration(apiKey: string, model: string) {
+export async function updateApiConfiguration(apiKey: string | null, model: string) {
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -65,15 +65,22 @@ export async function updateApiConfiguration(apiKey: string, model: string) {
       return { success: false, error: 'Not authenticated' }
     }
 
-    // Encrypt the API key before storing
-    const encryptedApiKey = encrypt(apiKey)
+    const updateData: {
+      claudeModel: string;
+      claudeApiKey?: string;
+    } = {
+      claudeModel: model,
+    }
+
+    // Only update API key if provided and not a masked key
+    if (apiKey && !apiKey.includes('...')) {
+      // Encrypt the API key before storing
+      updateData.claudeApiKey = encrypt(apiKey)
+    }
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        claudeApiKey: encryptedApiKey,
-        claudeModel: model,
-      }
+      data: updateData
     })
 
     revalidatePath('/settings')
