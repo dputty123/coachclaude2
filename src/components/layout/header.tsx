@@ -24,7 +24,6 @@ export function Header() {
         </div>
       </div>
       <div className="flex items-center space-x-4">
-        <Button size="sm" variant="outline">Help</Button>
         <Link href="/new-session">
           <Button size="sm">+ New Session</Button>
         </Link>
