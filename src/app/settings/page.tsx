@@ -11,49 +11,38 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PromptTemplateEditor } from "@/components/settings/prompt-template-editor";
 import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "@/lib/constants/claude-models";
-import { 
-  getUserSettings, 
-  updateApiConfiguration, 
-  updateSystemPrompt 
-} from "@/app/actions/settings";
 import { Loader2 } from "lucide-react";
+import { 
+  useUserSettings, 
+  useUpdateApiConfiguration, 
+  useUpdateSystemPrompt 
+} from "@/hooks/use-settings";
 
 export default function SettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [apiKey, setApiKey] = useState<string>("");
-  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
-  const [savedApiKey, setSavedApiKey] = useState<string>(""); // Store the masked key separately
-  const [isEditingApiKey, setIsEditingApiKey] = useState<boolean>(false);
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_CLAUDE_MODEL);
-  const [analysisPrompt, setAnalysisPrompt] = useState<string>("");
-  const [preparationPrompt, setPreparationPrompt] = useState<string>("");
-  const [lastSavedAnalysis, setLastSavedAnalysis] = useState<string>("");
-  const [lastSavedPreparation, setLastSavedPreparation] = useState<string>("");
-  const [savingApi, setSavingApi] = useState(false);
-  const [savingPrompt, setSavingPrompt] = useState(false);
+  // React Query hooks
+  const { data: settings, isLoading } = useUserSettings();
+  const updateApiConfig = useUpdateApiConfiguration();
+  const updatePrompt = useUpdateSystemPrompt();
 
+  // Local state for form inputs
+  const [apiKey, setApiKey] = useState<string>("");
+  const [isEditingApiKey, setIsEditingApiKey] = useState<boolean>(false);
+  const [selectedModel, setSelectedModel] = useState<string>(settings?.claudeModel || DEFAULT_CLAUDE_MODEL);
+  const [analysisPrompt, setAnalysisPrompt] = useState<string>(settings?.analysisPrompt || "");
+  const [preparationPrompt, setPreparationPrompt] = useState<string>(settings?.preparationPrompt || "");
+
+  // Update local state when settings data changes
   useEffect(() => {
-    const loadSettings = async () => {
-      const result = await getUserSettings();
-      if (result.success && result.data) {
-        setHasApiKey(result.data.hasApiKey || false);
-        if (result.data.claudeApiKey) {
-          setSavedApiKey(result.data.claudeApiKey); // Store masked key separately
-        }
-        setSelectedModel(result.data.claudeModel || DEFAULT_CLAUDE_MODEL);
-        setAnalysisPrompt(result.data.analysisPrompt || "");
-        setPreparationPrompt(result.data.preparationPrompt || "");
-        setLastSavedAnalysis(result.data.analysisPrompt || "");
-        setLastSavedPreparation(result.data.preparationPrompt || "");
-      }
-      setLoading(false);
-    };
-    loadSettings();
-  }, []);
+    if (settings) {
+      setSelectedModel(settings.claudeModel || DEFAULT_CLAUDE_MODEL);
+      setAnalysisPrompt(settings.analysisPrompt || "");
+      setPreparationPrompt(settings.preparationPrompt || "");
+    }
+  }, [settings]);
 
   const handleSaveApiKey = async () => {
     if (!apiKey.trim()) {
@@ -61,25 +50,15 @@ export default function SettingsPage() {
       return;
     }
     
-    setSavingApi(true);
-    const result = await updateApiConfiguration(apiKey, selectedModel);
-    
-    if (result.success) {
-      // Reload settings to get the masked API key
-      const settingsResult = await getUserSettings();
-      if (settingsResult.success && settingsResult.data) {
-        setHasApiKey(true);
-        if (settingsResult.data.claudeApiKey) {
-          setSavedApiKey(settingsResult.data.claudeApiKey);
+    await updateApiConfig.mutateAsync(
+      { apiKey, model: selectedModel },
+      {
+        onSuccess: () => {
           setApiKey(""); // Clear the input
           setIsEditingApiKey(false);
         }
       }
-      toast.success("API configuration saved successfully");
-    } else {
-      toast.error(result.error || "Failed to save API configuration");
-    }
-    setSavingApi(false);
+    );
   };
 
   const handleSaveAnalysisPrompt = async () => {
@@ -88,16 +67,7 @@ export default function SettingsPage() {
       return;
     }
     
-    setSavingPrompt(true);
-    const result = await updateSystemPrompt('analysis', analysisPrompt);
-    
-    if (result.success) {
-      setLastSavedAnalysis(analysisPrompt);
-      toast.success("Analysis prompt saved successfully");
-    } else {
-      toast.error(result.error || "Failed to save analysis prompt");
-    }
-    setSavingPrompt(false);
+    await updatePrompt.mutateAsync({ type: 'analysis', prompt: analysisPrompt });
   };
 
   const handleSavePreparationPrompt = async () => {
@@ -106,22 +76,13 @@ export default function SettingsPage() {
       return;
     }
     
-    setSavingPrompt(true);
-    const result = await updateSystemPrompt('preparation', preparationPrompt);
-    
-    if (result.success) {
-      setLastSavedPreparation(preparationPrompt);
-      toast.success("Preparation prompt saved successfully");
-    } else {
-      toast.error(result.error || "Failed to save preparation prompt");
-    }
-    setSavingPrompt(false);
+    await updatePrompt.mutateAsync({ type: 'preparation', prompt: preparationPrompt });
   };
 
-  const hasUnsavedAnalysis = analysisPrompt !== lastSavedAnalysis;
-  const hasUnsavedPreparation = preparationPrompt !== lastSavedPreparation;
+  const hasUnsavedAnalysis = analysisPrompt !== (settings?.analysisPrompt || "");
+  const hasUnsavedPreparation = preparationPrompt !== (settings?.preparationPrompt || "");
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -155,12 +116,12 @@ export default function SettingsPage() {
                 <Label htmlFor="claude-api-key-input">Claude API Key</Label>
                 <form onSubmit={(e) => { e.preventDefault(); handleSaveApiKey(); }} autoComplete="off">
                 <div className="flex space-x-2">
-                  {hasApiKey && !isEditingApiKey ? (
+                  {settings?.hasApiKey && !isEditingApiKey ? (
                     <>
                       <Input
                         id="api-key"
                         type="text"
-                        value={savedApiKey}
+                        value={settings.claudeApiKey || ""}
                         disabled
                         className="flex-1"
                       />
@@ -189,8 +150,8 @@ export default function SettingsPage() {
                         data-form-type="other"
                         data-1p-ignore
                       />
-                      <Button onClick={handleSaveApiKey} disabled={savingApi}>
-                        {savingApi ? (
+                      <Button onClick={handleSaveApiKey} disabled={updateApiConfig.isPending}>
+                        {updateApiConfig.isPending ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Saving...
@@ -230,14 +191,15 @@ export default function SettingsPage() {
                     setSelectedModel(newModel);
                     
                     // Auto-save the model selection (even without API key)
-                    const result = await updateApiConfiguration(null, newModel);
-                    if (result.success) {
-                      toast.success("Model preference saved");
-                    } else {
-                      toast.error("Failed to update model");
-                      // Revert on failure
-                      setSelectedModel(selectedModel);
-                    }
+                    await updateApiConfig.mutateAsync(
+                      { apiKey: null, model: newModel },
+                      {
+                        onError: () => {
+                          // Revert on failure
+                          setSelectedModel(selectedModel);
+                        }
+                      }
+                    );
                   }}
                 >
                   {CLAUDE_MODELS.map((model) => (
@@ -292,9 +254,9 @@ export default function SettingsPage() {
                     </div>
                     <Button 
                       onClick={handleSaveAnalysisPrompt} 
-                      disabled={!hasUnsavedAnalysis || savingPrompt}
+                      disabled={!hasUnsavedAnalysis || updatePrompt.isPending}
                     >
-                      {savingPrompt ? (
+                      {updatePrompt.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Saving...
@@ -339,9 +301,9 @@ export default function SettingsPage() {
                     </div>
                     <Button 
                       onClick={handleSavePreparationPrompt} 
-                      disabled={!hasUnsavedPreparation || savingPrompt}
+                      disabled={!hasUnsavedPreparation || updatePrompt.isPending}
                     >
-                      {savingPrompt ? (
+                      {updatePrompt.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Saving...

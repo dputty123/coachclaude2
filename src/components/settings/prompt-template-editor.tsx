@@ -1,59 +1,41 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { TemplateList } from "./template-list";
 import { TemplateForm } from "./template-form";
 import { PromptTemplate } from "./types";
-import {
-  getPromptTemplates,
-  createPromptTemplate,
-  updatePromptTemplate,
-  deletePromptTemplate,
-  setTemplateAsDefault,
-  getUserSettings
-} from "@/app/actions/settings";
 import { Loader2 } from "lucide-react";
+import { 
+  usePromptTemplates,
+  useCreatePromptTemplate,
+  useUpdatePromptTemplate,
+  useDeletePromptTemplate,
+  useSetTemplateAsDefault
+} from "@/hooks/use-prompt-templates";
+import { useUserSettings } from "@/hooks/use-settings";
 
 export const PromptTemplateEditor = () => {
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+  // React Query hooks
+  const { data: templates = [], isLoading: templatesLoading } = usePromptTemplates();
+  const { data: settings } = useUserSettings();
+  const createTemplate = useCreatePromptTemplate();
+  const updateTemplate = useUpdatePromptTemplate();
+  const deleteTemplate = useDeletePromptTemplate();
+  const setAsDefault = useSetTemplateAsDefault();
+
+  // Local state
   const [activeTemplate, setActiveTemplate] = useState<PromptTemplate | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
-  const [activePreparationId, setActivePreparationId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadTemplates();
-  }, []);
-
-  const loadTemplates = async () => {
-    setLoading(true);
-    const [templatesResult, settingsResult] = await Promise.all([
-      getPromptTemplates(),
-      getUserSettings()
-    ]);
-    
-    if (templatesResult.success && templatesResult.data) {
-      setTemplates(templatesResult.data);
-    }
-    
-    if (settingsResult.success && settingsResult.data) {
-      // Find which templates are currently active
-      const analysisTemplate = templatesResult.data?.find(
-        t => t.type === 'analysis' && t.content === settingsResult.data.analysisPrompt
-      );
-      const prepTemplate = templatesResult.data?.find(
-        t => t.type === 'preparation' && t.content === settingsResult.data.preparationPrompt
-      );
-      
-      setActiveAnalysisId(analysisTemplate?.id || null);
-      setActivePreparationId(prepTemplate?.id || null);
-    }
-    
-    setLoading(false);
-  };
+  // Determine which templates are currently active
+  const activeAnalysisId = templates.find(
+    t => t.type === 'analysis' && t.content === settings?.analysisPrompt
+  )?.id || null;
+  
+  const activePreparationId = templates.find(
+    t => t.type === 'preparation' && t.content === settings?.preparationPrompt
+  )?.id || null;
 
   const handleAddTemplate = () => {
     const newTemplate: PromptTemplate = {
@@ -81,62 +63,48 @@ export const PromptTemplateEditor = () => {
       return;
     }
     
-    setSaving(true);
-    const result = await deletePromptTemplate(id);
-    
-    if (result.success) {
-      await loadTemplates();
-      if (activeTemplate?.id === id) {
-        setActiveTemplate(null);
-        setIsEditing(false);
+    await deleteTemplate.mutateAsync(id, {
+      onSuccess: () => {
+        if (activeTemplate?.id === id) {
+          setActiveTemplate(null);
+          setIsEditing(false);
+        }
       }
-      toast.success("Template deleted");
-    } else {
-      toast.error(result.error || "Failed to delete template");
-    }
-    setSaving(false);
+    });
   };
 
   const handleSaveTemplate = async () => {
     if (!activeTemplate) return;
     
-    setSaving(true);
-    
-    try {
-      if (activeTemplate.id === 'new') {
-        // Create new template
-        const result = await createPromptTemplate(
-          activeTemplate.name,
-          activeTemplate.type,
-          activeTemplate.content
-        );
-        
-        if (result.success) {
-          await loadTemplates();
-          setActiveTemplate(result.data!);
-          setIsEditing(false);
-          toast.success("Template created successfully");
-        } else {
-          toast.error(result.error || "Failed to create template");
+    if (activeTemplate.id === 'new') {
+      // Create new template
+      await createTemplate.mutateAsync(
+        {
+          name: activeTemplate.name,
+          type: activeTemplate.type,
+          content: activeTemplate.content
+        },
+        {
+          onSuccess: (data) => {
+            setActiveTemplate(data as PromptTemplate);
+            setIsEditing(false);
+          }
         }
-      } else {
-        // Update existing template
-        const result = await updatePromptTemplate(
-          activeTemplate.id,
-          activeTemplate.name,
-          activeTemplate.content
-        );
-        
-        if (result.success) {
-          await loadTemplates();
-          setIsEditing(false);
-          toast.success("Template saved successfully");
-        } else {
-          toast.error(result.error || "Failed to save template");
+      );
+    } else {
+      // Update existing template
+      await updateTemplate.mutateAsync(
+        {
+          id: activeTemplate.id,
+          name: activeTemplate.name,
+          content: activeTemplate.content
+        },
+        {
+          onSuccess: () => {
+            setIsEditing(false);
+          }
         }
-      }
-    } finally {
-      setSaving(false);
+      );
     }
   };
 
@@ -160,25 +128,19 @@ export const PromptTemplateEditor = () => {
   };
   
   const handleSetAsDefault = async (id: string) => {
-    setSaving(true);
-    const result = await setTemplateAsDefault(id);
-    
-    if (result.success) {
-      await loadTemplates();
-      toast.success("Template set as default");
-    } else {
-      toast.error(result.error || "Failed to set as default");
-    }
-    setSaving(false);
+    await setAsDefault.mutateAsync(id);
   };
   
-  if (loading) {
+  if (templatesLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
+
+  const saving = createTemplate.isPending || updateTemplate.isPending || 
+                 deleteTemplate.isPending || setAsDefault.isPending;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

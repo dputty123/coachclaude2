@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { createClient } from '@/lib/supabase/server'
 import { encrypt, safeDecrypt } from '@/lib/encryption'
-import { revalidatePath } from 'next/cache'
 
 export async function getUserSettings() {
   try {
@@ -83,7 +82,6 @@ export async function updateApiConfiguration(apiKey: string | null, model: strin
       data: updateData
     })
 
-    revalidatePath('/settings')
     return { success: true }
   } catch (error) {
     console.error('Error updating API configuration:', error)
@@ -109,7 +107,6 @@ export async function updateSystemPrompt(type: 'analysis' | 'preparation', promp
       }
     })
 
-    revalidatePath('/settings')
     return { success: true }
   } catch (error) {
     console.error('Error updating system prompt:', error)
@@ -169,7 +166,6 @@ export async function createPromptTemplate(name: string, type: 'analysis' | 'pre
       type: template.type as 'analysis' | 'preparation'
     }
 
-    revalidatePath('/settings')
     return { success: true, data: typedTemplate }
   } catch (error) {
     console.error('Error creating prompt template:', error)
@@ -197,7 +193,6 @@ export async function updatePromptTemplate(id: string, name: string, content: st
       }
     })
 
-    revalidatePath('/settings')
     return { success: true, data: template }
   } catch (error) {
     console.error('Error updating prompt template:', error)
@@ -249,7 +244,6 @@ export async function deletePromptTemplate(id: string) {
       }
     })
 
-    revalidatePath('/settings')
     return { success: true }
   } catch (error) {
     console.error('Error deleting prompt template:', error)
@@ -287,7 +281,6 @@ export async function setTemplateAsDefault(id: string) {
       }
     })
 
-    revalidatePath('/settings')
     return { success: true }
   } catch (error) {
     console.error('Error setting template as default:', error)
