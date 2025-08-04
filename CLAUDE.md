@@ -536,3 +536,74 @@ export function AddClientDialog() {
 - A client component can render server components as children
 - But a server component cannot import a client component directly (only as children)
 - Props passed from server to client components must be serializable (no functions)
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+
+## Context Documents Feature
+
+### Overview
+Coaches can upload PDF, TXT, and MD files as context documents that are automatically included in all AI-generated analyses and preparations. This allows coaches to provide:
+- Coaching frameworks
+- Book summaries
+- Personal principles and goals
+- Client-specific background
+
+### Implementation Details
+
+1. **Storage**: Files are stored in Supabase Storage bucket `context-documents` with user-specific folders
+2. **Text Extraction**: 
+   - PDFs are parsed using `pdf-parse` library
+   - Text/MD files are read directly
+   - Content is stored in database for quick access
+3. **AI Integration**: When generating analysis/preparation:
+   ```typescript
+   const contextResult = await getAllUserContextDocuments()
+   const fullPrompt = `
+   ${contextResult.data?.combinedContent}
+   
+   ${userCustomPrompt}
+   
+   ${transcript}
+   `
+   ```
+
+### React Query Usage Pattern
+
+All data fetching uses React Query with these conventions:
+- **Query hooks**: `use[Resource]()` (e.g., `useContextDocuments()`)
+- **Mutation hooks**: `use[Action][Resource]()` (e.g., `useDeleteDocument()`)
+- **5-minute stale time** for caching
+- **Optimistic updates** for delete operations
+- **Toast notifications** for all mutations
+
+Example:
+```typescript
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => { /* ... */ },
+    onMutate: async (deletedId) => {
+      // Cancel queries and snapshot previous value
+      await queryClient.cancelQueries({ queryKey: ['context-documents'] })
+      const previousDocuments = queryClient.getQueryData(['context-documents'])
+      
+      // Optimistically update
+      queryClient.setQueryData(['context-documents'], (old) => 
+        old ? old.filter(doc => doc.id !== deletedId) : []
+      )
+      
+      return { previousDocuments }
+    },
+    onError: (error, _, context) => {
+      // Rollback on error
+      if (context?.previousDocuments) {
+        queryClient.setQueryData(['context-documents'], context.previousDocuments)
+      }
+    }
+  })
+}
+```

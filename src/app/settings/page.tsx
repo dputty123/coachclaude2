@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PromptTemplateEditor } from "@/components/settings/prompt-template-editor";
+import { ContextDocuments } from "@/components/settings/context-documents";
 import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "@/lib/constants/claude-models";
 import { Loader2 } from "lucide-react";
 import { 
@@ -103,6 +104,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="api">API Configuration</TabsTrigger>
           <TabsTrigger value="system-prompt">System Prompts</TabsTrigger>
+          <TabsTrigger value="context">Context Documents</TabsTrigger>
           <TabsTrigger value="templates">Prompt Templates</TabsTrigger>
         </TabsList>
 
@@ -317,6 +319,10 @@ export default function SettingsPage() {
               </Card>
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        <TabsContent value="context">
+          <ContextDocuments />
         </TabsContent>
 
         <TabsContent value="templates">
