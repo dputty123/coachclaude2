@@ -22,7 +22,7 @@ model User {
   
   // API Configuration
   claudeApiKey       String?  // Encrypted
-  claudeModel        String?  @default("claude-3-sonnet-20240229")
+  claudeModel        String?  @default("claude-opus-4-20250514")
   googleRefreshToken String?  // For Google OAuth
   
   // Active Prompts
@@ -36,6 +36,7 @@ model User {
   clients            Client[]
   sessions           Session[]
   promptTemplates    PromptTemplate[]
+  contextDocuments   ContextDocument[]
 }
 
 // Client model - represents people that coaches work with
@@ -216,4 +217,19 @@ model PromptTemplate {
   updatedAt   DateTime @updatedAt
   
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ContextDocument - uploaded documents for context in AI prompts
+model ContextDocument {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String   // Filename or custom name
+  fileUrl     String   // Supabase storage URL
+  fileType    String   // 'pdf' | 'txt' | 'md'
+  content     String   @db.Text // Extracted text content
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
