@@ -2,50 +2,76 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageSquare, StickyNote } from 'lucide-react'
-import type { Session, ClientNote } from '@/generated/prisma'
+import { MessageSquare, Mail, BookOpen } from 'lucide-react'
+import type { Session, ClientResource } from '@/generated/prisma'
 
 interface ClientTimelineProps {
   clientId: string
   sessions: Session[]
-  notes: ClientNote[]
+  resources?: ClientResource[]
 }
 
 interface TimelineItem {
   id: string
-  type: 'session' | 'note' | 'followup'
+  type: 'session' | 'followup' | 'resource'
   date: Date
   title: string
   description: string
   icon: React.ReactNode
+  sessionId?: string
 }
 
-export function ClientTimeline({ sessions, notes }: ClientTimelineProps) {
-  // Combine sessions and notes into a single timeline
-  const timelineItems: TimelineItem[] = [
-    ...sessions.map(session => ({
+export function ClientTimeline({ sessions, resources = [] }: ClientTimelineProps) {
+  // Create timeline items from sessions and their follow-ups
+  const timelineItems: TimelineItem[] = []
+  
+  // Add sessions and their follow-up emails
+  sessions.forEach(session => {
+    // Add the session itself
+    timelineItems.push({
       id: session.id,
       type: 'session' as const,
       date: session.date || session.createdAt,
       title: session.title || 'Coaching Session',
       description: session.summary || 'No summary available',
       icon: <MessageSquare className="h-4 w-4" />
-    })),
-    ...notes.map(note => ({
-      id: note.id,
-      type: 'note' as const,
-      date: note.createdAt,
-      title: 'Note Added',
-      description: note.content.substring(0, 100) + (note.content.length > 100 ? '...' : ''),
-      icon: <StickyNote className="h-4 w-4" />
-    }))
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    })
+    
+    // Add follow-up email if it exists
+    if (session.followUpEmail) {
+      timelineItems.push({
+        id: `${session.id}-followup`,
+        type: 'followup' as const,
+        date: new Date(session.updatedAt), // Use updated time as follow-up is generated after session
+        title: 'Follow-up Email Sent',
+        description: 'Follow-up email generated and sent to client',
+        icon: <Mail className="h-4 w-4" />,
+        sessionId: session.id
+      })
+    }
+  })
+  
+  // Add resources
+  resources.forEach(resource => {
+    timelineItems.push({
+      id: resource.id,
+      type: 'resource' as const,
+      date: resource.suggestedAt,
+      title: 'Resource Suggested',
+      description: resource.reason || 'Resource suggested for client',
+      icon: <BookOpen className="h-4 w-4" />,
+      sessionId: resource.sessionId || undefined
+    })
+  })
+  
+  // Sort by date (most recent first)
+  timelineItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   const getIconBackground = (type: string) => {
     switch(type) {
       case 'session': return 'bg-coaching-100 text-coaching-600'
-      case 'note': return 'bg-amber-100 text-amber-600'
       case 'followup': return 'bg-green-100 text-green-600'
+      case 'resource': return 'bg-blue-100 text-blue-600'
       default: return 'bg-gray-100 text-gray-600'
     }
   }
@@ -54,7 +80,7 @@ export function ClientTimeline({ sessions, notes }: ClientTimelineProps) {
     return (
       <Card>
         <CardContent className="p-6 text-center">
-          <p className="text-muted-foreground">No activity yet. Start by creating a session or adding a note.</p>
+          <p className="text-muted-foreground">No activity yet. Start by creating a coaching session.</p>
         </CardContent>
       </Card>
     )

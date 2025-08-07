@@ -26,7 +26,7 @@ import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
 import { ClientNotes } from './client-notes'
 import { useUpdateClient, useDeleteClient, useClients, useAddTeamMember, useRemoveTeamMember } from '@/hooks/use-clients'
-import type { Client, Session, ClientNote } from '@/generated/prisma'
+import type { Client, Session, ClientNote, ClientResource } from '@/generated/prisma'
 import type { ClientFormData } from '@/hooks/use-clients'
 
 interface ClientWithRelations extends Client {
@@ -36,6 +36,7 @@ interface ClientWithRelations extends Client {
   teamMemberOf: Client[]
   sessions: Session[]
   notes: ClientNote[]
+  resources: ClientResource[] // ClientResource with Resource relation
   _count: {
     sessions: number
   }
@@ -509,9 +510,11 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                     <h4 className="font-medium text-sm">Reports to</h4>
                     <div className="p-3 border rounded-md">
                       {client.reportsTo ? (
-                        <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
-                          {client.reportsTo.name}
-                        </span>
+                        <Link href={`/clients/${client.reportsTo.id}`}>
+                          <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md hover:bg-secondary/80 transition-colors cursor-pointer inline-block">
+                            {client.reportsTo.name}
+                          </span>
+                        </Link>
                       ) : (
                         <p className="text-muted-foreground">Not specified</p>
                       )}
@@ -529,14 +532,18 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                       {client.teamMembers.length > 0 || client.teamMemberOf.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {client.teamMembers.map((member) => (
-                            <span key={member.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
-                              {member.name}
-                            </span>
+                            <Link key={member.id} href={`/clients/${member.id}`}>
+                              <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md hover:bg-secondary/80 transition-colors cursor-pointer inline-block">
+                                {member.name}
+                              </span>
+                            </Link>
                           ))}
                           {client.teamMemberOf.map((member) => (
-                            <span key={member.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
-                              {member.name}
-                            </span>
+                            <Link key={member.id} href={`/clients/${member.id}`}>
+                              <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md hover:bg-secondary/80 transition-colors cursor-pointer inline-block">
+                                {member.name}
+                              </span>
+                            </Link>
                           ))}
                         </div>
                       ) : (
@@ -558,7 +565,7 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
               <ClientTimeline 
                 clientId={client.id} 
                 sessions={client.sessions}
-                notes={client.notes}
+                resources={client.resources}
               />
             </TabsContent>
             <TabsContent value="notes">

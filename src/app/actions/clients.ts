@@ -58,6 +58,12 @@ export async function getClient(id: string, userId: string) {
         notes: {
           orderBy: { createdAt: 'desc' }
         },
+        resources: {
+          orderBy: { suggestedAt: 'desc' },
+          include: {
+            resource: true
+          }
+        },
         _count: {
           select: { sessions: true }
         }
