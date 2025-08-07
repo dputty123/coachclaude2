@@ -118,7 +118,7 @@ export function ClientsList() {
                       <span className="font-medium">Sessions:</span> {client._count?.sessions || 0}
                     </div>
                     <div className="text-sm">
-                      <span className="font-medium">Since:</span> {new Date(client.createdAt).toLocaleDateString()}
+                      <span className="font-medium">Coaching since:</span> {client.coachingSince ? new Date(client.coachingSince).toLocaleDateString() : 'Not specified'}
                     </div>
                   </div>
                 </CardContent>
