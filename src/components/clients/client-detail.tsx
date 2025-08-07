@@ -272,24 +272,31 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
           </Link>
           <h2>{client.name}</h2>
         </div>
-        <Button 
-          variant="destructive" 
-          size="sm" 
-          onClick={() => setShowDeleteDialog(true)}
-        >
-          Delete Client
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleStartEditing}
+            disabled={isEditing}
+            className="h-9 px-4"
+          >
+            Edit Client
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={() => setShowDeleteDialog(true)}
+            className="h-9 px-4"
+          >
+            Delete Client
+          </Button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader>
             <CardTitle>Client Information</CardTitle>
-            {!isEditing && (
-              <Button variant="ghost" size="sm" onClick={handleStartEditing}>
-                Edit
-              </Button>
-            )}
           </CardHeader>
           <CardContent className="space-y-4">
             {isEditing && editedClient ? (
