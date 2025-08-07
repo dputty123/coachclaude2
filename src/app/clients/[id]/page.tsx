@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
-import { getClient } from '@/app/actions/clients'
 import { getUserServer } from '@/app/actions/user'
-import { ClientDetail } from '@/components/clients/client-detail'
+import { ClientDetailWrapper } from '@/components/clients/client-detail-wrapper'
 
 interface ClientPageProps {
   params: Promise<{
@@ -17,15 +16,9 @@ export default async function ClientPage({ params }: ClientPageProps) {
     notFound()
   }
 
-  const result = await getClient(id, user.id)
-  
-  if (!result.success || !result.data) {
-    notFound()
-  }
-
   return (
     <div className="animate-in">
-      <ClientDetail client={result.data} userId={user.id} />
+      <ClientDetailWrapper clientId={id} userId={user.id} />
     </div>
   )
 }
