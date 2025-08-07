@@ -662,6 +662,348 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 
+## AI Chat Architecture with Vercel AI SDK
+
+### Overview
+Coach Claude uses a **generic, reusable chat architecture** powered by Vercel AI SDK that works across three contexts:
+1. **Session Chat** - Discuss a specific coaching session
+2. **Client Chat** - Analyze a client's entire history
+3. **Global Chat** - Query across all coaching data
+
+### Technology Stack
+- **Vercel AI SDK** (`ai` package) - Handles streaming, message management, and Claude integration
+- **react-markdown** - Renders AI responses with proper formatting
+- **Generic Chat Model** - Single database table for all chat contexts
+
+### Installation
+```bash
+npm install ai react-markdown
+```
+
+### Database Architecture
+
+```prisma
+// Generic chat model - works for all contexts
+model Chat {
+  id          String   @id @default(cuid())
+  userId      String
+  contextType String   // 'session' | 'client' | 'global'
+  contextId   String?  // sessionId or clientId (null for global)
+  title       String?  // Auto-generated or user-defined
+  messages    Json     // Array of {role, content, timestamp}
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId, contextType, contextId])
+}
+```
+
+### Core Implementation
+
+#### 1. Reusable Chat Hook (`/hooks/use-ai-chat.ts`)
+```typescript
+import { useChat } from 'ai/react';
+import { toast } from 'sonner';
+
+export function useAIChat(
+  contextType: 'session' | 'client' | 'global', 
+  contextId?: string
+) {
+  return useChat({
+    api: '/api/chat',
+    body: {
+      contextType,
+      contextId,
+    },
+    onError: (error) => {
+      toast.error('Chat error: ' + error.message);
+    },
+  });
+}
+```
+
+#### 2. Unified API Route (`/app/api/chat/route.ts`)
+```typescript
+import { StreamingTextResponse } from 'ai';
+import { prisma } from '@/lib/prisma';
+import { getAllUserContextDocuments } from '@/app/actions/context-documents';
+import { safeDecrypt } from '@/lib/encryption';
+
+export async function POST(req: Request) {
+  const { messages, contextType, contextId } = await req.json();
+  const user = await getUser();
+  
+  // Build context based on type
+  let context = '';
+  
+  switch (contextType) {
+    case 'session':
+      const session = await prisma.session.findUnique({
+        where: { id: contextId },
+        include: { client: true, tags: true, resources: true }
+      });
+      context = buildSessionContext(session);
+      break;
+      
+    case 'client':
+      const clientData = await prisma.client.findUnique({
+        where: { id: contextId },
+        include: { 
+          sessions: { 
+            orderBy: { date: 'desc' },
+            include: { tags: true }
+          },
+          notes: true,
+          resources: true
+        }
+      });
+      context = buildClientContext(clientData);
+      break;
+      
+    case 'global':
+      const allData = await prisma.session.findMany({
+        where: { userId: user.id },
+        include: { client: true, tags: true }
+      });
+      context = buildGlobalContext(allData);
+      break;
+  }
+  
+  // Include context documents
+  const contextDocs = await getAllUserContextDocuments();
+  
+  // Prepare messages with full context
+  const systemMessage = {
+    role: 'system',
+    content: `
+      ${contextDocs.data?.combinedContent || ''}
+      
+      You are an AI coaching assistant with access to the following context:
+      ${context}
+      
+      Provide insights and answer questions based on this coaching data.
+    `
+  };
+  
+  // Decrypt API key
+  const apiKey = safeDecrypt(user.claudeApiKey);
+  if (!apiKey) {
+    return new Response('Please configure your Claude API key', { status: 400 });
+  }
+  
+  // Stream response from Claude
+  const response = await callClaudeAPI({
+    messages: [systemMessage, ...messages],
+    apiKey,
+    model: user.claudeModel || 'claude-3-sonnet-20240229',
+    stream: true
+  });
+  
+  return new StreamingTextResponse(response);
+}
+```
+
+#### 3. Reusable Chat Component (`/components/chat/ai-chat.tsx`)
+```typescript
+'use client';
+
+import { useAIChat } from '@/hooks/use-ai-chat';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import ReactMarkdown from 'react-markdown';
+import { cn } from '@/lib/utils';
+
+interface AIChatProps {
+  contextType: 'session' | 'client' | 'global';
+  contextId?: string;
+  placeholder?: string;
+  className?: string;
+}
+
+export function AIChat({ 
+  contextType, 
+  contextId,
+  placeholder = "Ask a question...",
+  className
+}: AIChatProps) {
+  const { 
+    messages, 
+    input, 
+    handleInputChange, 
+    handleSubmit, 
+    isLoading,
+    stop,
+    reload
+  } = useAIChat(contextType, contextId);
+  
+  return (
+    <div className={cn("flex flex-col h-full", className)}>
+      <ScrollArea className="flex-1 p-4">
+        {messages.map((message) => (
+          <div 
+            key={message.id} 
+            className={cn(
+              "mb-4",
+              message.role === 'user' ? 'text-right' : 'text-left'
+            )}
+          >
+            <div className={cn(
+              "inline-block p-3 rounded-lg max-w-[80%]",
+              message.role === 'user' 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-muted'
+            )}>
+              <ReactMarkdown className="prose prose-sm dark:prose-invert">
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="animate-pulse">AI is thinking...</div>
+            <Button size="sm" variant="ghost" onClick={stop}>
+              Stop
+            </Button>
+          </div>
+        )}
+      </ScrollArea>
+      
+      <form onSubmit={handleSubmit} className="p-4 border-t">
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={handleInputChange}
+            placeholder={placeholder}
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button type="submit" disabled={isLoading || !input.trim()}>
+            Send
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+```
+
+### Usage Examples
+
+#### Session Chat
+```typescript
+// /app/sessions/[id]/chat/page.tsx
+<AIChat 
+  contextType="session" 
+  contextId={sessionId}
+  placeholder="Ask about this coaching session..."
+/>
+```
+
+#### Client Chat
+```typescript
+// /app/clients/[id]/chat/page.tsx
+<AIChat 
+  contextType="client" 
+  contextId={clientId}
+  placeholder="Ask about this client's journey..."
+/>
+```
+
+#### Global Chat (Sidebar)
+```typescript
+// /components/layout/sidebar-chat.tsx
+<AIChat 
+  contextType="global"
+  placeholder="Ask about all your coaching data..."
+/>
+```
+
+### Context Building Functions
+
+```typescript
+function buildSessionContext(session: SessionWithRelations): string {
+  return `
+    Session: ${session.title}
+    Client: ${session.client.name}
+    Date: ${session.date}
+    Transcript: ${session.transcript}
+    Analysis: ${session.analysis}
+    Summary: ${session.summary}
+    Tags: ${session.tags.map(t => t.tag.name).join(', ')}
+    Resources: ${session.resources.map(r => r.resource.title).join(', ')}
+  `;
+}
+
+function buildClientContext(client: ClientWithRelations): string {
+  const sessionHistory = client.sessions
+    .map(s => `- ${s.date}: ${s.title} (${s.summary || 'No summary'})`)
+    .join('\n');
+    
+  return `
+    Client: ${client.name}
+    Role: ${client.role} at ${client.company}
+    Coaching Since: ${client.coachingSince}
+    Total Sessions: ${client.sessions.length}
+    
+    Session History:
+    ${sessionHistory}
+    
+    Notes:
+    ${client.notes.map(n => n.content).join('\n')}
+  `;
+}
+
+function buildGlobalContext(allSessions: SessionWithClient[]): string {
+  const stats = {
+    totalSessions: allSessions.length,
+    totalClients: new Set(allSessions.map(s => s.clientId)).size,
+    recentThemes: extractCommonTags(allSessions),
+    monthlyTrends: calculateMonthlyTrends(allSessions)
+  };
+  
+  return `
+    Coaching Statistics:
+    - Total Sessions: ${stats.totalSessions}
+    - Total Clients: ${stats.totalClients}
+    - Common Themes: ${stats.recentThemes.join(', ')}
+    - This Month: ${stats.monthlyTrends.current} sessions
+    - Last Month: ${stats.monthlyTrends.previous} sessions
+  `;
+}
+```
+
+### Features
+
+1. **Streaming Responses**: Real-time token streaming for better UX
+2. **Context Awareness**: Each chat type has access to relevant data
+3. **History Persistence**: All conversations saved in Chat table
+4. **Multiple Chats**: Users can have multiple chat sessions per context
+5. **Error Handling**: Built-in error handling and retry logic
+6. **Abort Control**: Users can stop generation mid-stream
+7. **Markdown Support**: Rich text formatting in responses
+8. **Context Documents**: All chats include uploaded coaching frameworks
+
+### Security Considerations
+
+- API keys are encrypted using AES-256-GCM
+- User authentication required for all chat endpoints
+- Context isolation ensures users only access their own data
+- Rate limiting should be implemented for production
+
+### Future Enhancements
+
+1. **Chat Titles**: Auto-generate titles based on first message
+2. **Search**: Search across all chat histories
+3. **Export**: Export chat conversations as PDF/Markdown
+4. **Sharing**: Share specific chats with clients (read-only)
+5. **Voice Input**: Add voice-to-text for questions
+6. **Suggested Questions**: Context-aware question suggestions
+
 ## Context Documents Feature
 
 ### Overview
