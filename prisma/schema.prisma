@@ -73,22 +73,9 @@ model Client {
   reportsTo        Client?   @relation("ReportsTo", fields: [reportsToId], references: [id])
   directReports    Client[]  @relation("ReportsTo")
   
-  // Team Members (bidirectional via join table)
-  teamMembers      TeamMembership[] @relation("TeamMember")
-  memberOf         TeamMembership[] @relation("MemberOf")
-}
-
-// TeamMembership - join table for bidirectional team relationships
-model TeamMembership {
-  id          String   @id @default(cuid())
-  memberId    String
-  teamId      String
-  createdAt   DateTime @default(now())
-  
-  member      Client   @relation("TeamMember", fields: [memberId], references: [id], onDelete: Cascade)
-  team        Client   @relation("MemberOf", fields: [teamId], references: [id], onDelete: Cascade)
-  
-  @@unique([memberId, teamId])
+  // Team Members (self-referencing many-to-many - automatically bidirectional)
+  teamMembers   Client[]  @relation("TeamMembers")
+  teamMemberOf  Client[]  @relation("TeamMembers")
 }
 
 // ClientNote - multiple notes per client with timestamps

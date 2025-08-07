@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_PROMPT_TEMPLATES, DEFAULT_ANALYSIS_PROMPT, DEFAULT_PREPARATION_PROMPT } from '@/lib/constants/default-templates'
 
 export async function createNewUser(userId: string, email: string, name?: string) {
@@ -50,4 +51,26 @@ export async function createNewUser(userId: string, email: string, name?: string
     console.error('Error in createNewUser:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
+}
+
+export async function getUserServer() {
+  const supabase = await createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  if (error || !user) {
+    return null
+  }
+  
+  return user
+}
+
+export async function getUserClient() {
+  const supabase = await createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  if (error || !user) {
+    return null
+  }
+  
+  return user
 }

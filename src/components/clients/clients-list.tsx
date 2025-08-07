@@ -1,30 +1,44 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Users } from 'lucide-react';
-
-// Mock data for clients - would come from Supabase in the real app
-const initialClients = [
-  { id: 1, name: 'Jane Smith', company: 'ABC Corp', role: 'Chief Marketing Officer', startDate: '2023-01-15' },
-  { id: 2, name: 'Tom Johnson', company: 'XYZ Tech', role: 'VP of Product', startDate: '2023-03-22' },
-  { id: 3, name: 'Maria Garcia', company: 'Global Foods', role: 'CEO', startDate: '2022-11-05' },
-  { id: 4, name: 'Alex Wong', company: 'Innovative Solutions', role: 'CTO', startDate: '2023-06-10' },
-  { id: 5, name: 'Sarah Lee', company: 'Finance Partners', role: 'COO', startDate: '2023-04-30' },
-  { id: 6, name: 'David Kim', company: 'Digital Media', role: 'Director of Operations', startDate: '2023-02-18' },
-];
+import { useClients } from '@/hooks/use-clients';
+import { useUser } from '@/hooks/use-user';
 
 export function ClientsList() {
   const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
+  const { data: user } = useUser();
+  const { data: clients, isLoading } = useClients(user?.id || '');
   
-  const filteredClients = initialClients.filter(client => 
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    client.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    
+    if (!searchTerm) return clients;
+    
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return clients.filter(client => 
+      client.name.toLowerCase().includes(lowerSearchTerm) || 
+      (client.company?.toLowerCase().includes(lowerSearchTerm) || false) ||
+      (client.role?.toLowerCase().includes(lowerSearchTerm) || false)
+    );
+  }, [clients, searchTerm]);
+  
+  // Prefetch client pages for visible clients
+  useEffect(() => {
+    if (filteredClients.length > 0) {
+      // Prefetch the first 6 visible clients for instant navigation
+      filteredClients.slice(0, 6).forEach(client => {
+        router.prefetch(`/clients/${client.id}`);
+      });
+    }
+  }, [filteredClients, router]);
 
   return (
     <div className="space-y-6">
@@ -33,7 +47,7 @@ export function ClientsList() {
           <Users className="h-5 w-5" />
           <h2>Clients</h2>
         </div>
-        <Button>+ Add Client</Button>
+        <Button onClick={() => router.push('/clients/new')}>+ Add Client</Button>
       </div>
       
       <div className="relative">
@@ -46,33 +60,73 @@ export function ClientsList() {
         />
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredClients.map(client => (
-          <Link href={`/clients/${client.id}`} key={client.id}>
-            <Card className="h-full card-hover">
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="h-full">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-coaching-100 text-coaching-600 flex items-center justify-center font-medium text-lg">
-                    {client.name.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{client.name}</h3>
-                    <p className="text-sm text-muted-foreground">{client.role}</p>
+                  <Skeleton className="w-12 h-12 rounded-full" />
+                  <div className="flex-1">
+                    <Skeleton className="h-5 w-32 mb-2" />
+                    <Skeleton className="h-4 w-24" />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm">
-                    <span className="font-medium">Company:</span> {client.company}
-                  </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Since:</span> {new Date(client.startDate).toLocaleDateString()}
-                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
                 </div>
               </CardContent>
             </Card>
-          </Link>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : filteredClients.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">
+            {searchTerm ? 'No clients found matching your search.' : 'No clients yet.'}
+          </p>
+          {!searchTerm && (
+            <Button onClick={() => router.push('/clients/new')}>
+              Add Your First Client
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredClients.map(client => (
+            <Link 
+              href={`/clients/${client.id}`} 
+              key={client.id}
+              prefetch={true}
+            >
+              <Card className="h-full card-hover transition-all duration-200 hover:scale-105">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-coaching-100 text-coaching-600 flex items-center justify-center font-medium text-lg">
+                      {client.name.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{client.name}</h3>
+                      <p className="text-sm text-muted-foreground">{client.role || 'No role specified'}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm">
+                      <span className="font-medium">Company:</span> {client.company || 'Not specified'}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Sessions:</span> {client._count?.sessions || 0}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Coaching since:</span> {client.coachingSince ? new Date(client.coachingSince).toLocaleDateString() : 'Not specified'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
