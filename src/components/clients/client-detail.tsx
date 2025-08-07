@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,6 @@ import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
 import { ClientNotes } from './client-notes'
 import { useUpdateClient, useDeleteClient, useClients, useAddTeamMember, useRemoveTeamMember } from '@/hooks/use-clients'
-import { getClient } from '@/app/actions/clients'
 import type { Client, Session, ClientNote } from '@/generated/prisma'
 import type { ClientFormData } from '@/hooks/use-clients'
 
@@ -54,6 +54,8 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   const { data: allClients } = useClients(userId)
   const updateMutation = useUpdateClient()
@@ -93,49 +95,81 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const handleSaveChanges = async () => {
     if (!editedClient) return
     
-    // Update basic client info
-    await updateMutation.mutateAsync({
-      id: client.id,
-      data: editedClient,
-      userId
-    })
-    
-    // Handle team member changes (include both directions)
-    const currentTeamMembers = [
-      ...client.teamMembers.map(tm => tm.id),
-      ...client.teamMemberOf.map(tm => tm.id)
-    ]
-    
-    // Find members to add and remove
-    const membersToAdd = selectedTeamMembers.filter(id => !currentTeamMembers.includes(id))
-    const membersToRemove = currentTeamMembers.filter(id => !selectedTeamMembers.includes(id))
-    
-    // Add new team members
-    for (const memberId of membersToAdd) {
-      await addTeamMemberMutation.mutateAsync({
-        clientId: client.id,
-        memberId,
+    setIsSaving(true)
+    try {
+      // Update basic client info
+      const updatedClient = await updateMutation.mutateAsync({
+        id: client.id,
+        data: editedClient,
         userId
       })
-    }
-    
-    // Remove team members
-    for (const memberId of membersToRemove) {
-      await removeTeamMemberMutation.mutateAsync({
-        clientId: client.id,
-        memberId,
-        userId
-      })
-    }
-    
-    setIsEditing(false)
-    setEditedClient(null)
-    setHasUnsavedChanges(false)
-    
-    // Refetch the client data to get updated relationships
-    const result = await getClient(client.id, userId)
-    if (result.success && result.data) {
-      setClient(result.data)
+      
+      // Optimistically update local state with the updated client info
+      if (updatedClient) {
+        setClient(prev => ({
+          ...prev,
+          ...updatedClient,
+          // Preserve relations that aren't updated by the basic update
+          reportsTo: editedClient.reportsToId !== prev.reportsToId 
+            ? allClients?.find(c => c.id === editedClient.reportsToId) || null 
+            : prev.reportsTo,
+          teamMembers: prev.teamMembers,
+          teamMemberOf: prev.teamMemberOf,
+          sessions: prev.sessions,
+          notes: prev.notes,
+          _count: prev._count
+        }))
+      }
+      
+      // Handle team member changes (include both directions)
+      const currentTeamMembers = [
+        ...client.teamMembers.map(tm => tm.id),
+        ...client.teamMemberOf.map(tm => tm.id)
+      ]
+      
+      // Find members to add and remove
+      const membersToAdd = selectedTeamMembers.filter(id => !currentTeamMembers.includes(id))
+      const membersToRemove = currentTeamMembers.filter(id => !selectedTeamMembers.includes(id))
+      
+      // Add new team members
+      for (const memberId of membersToAdd) {
+        await addTeamMemberMutation.mutateAsync({
+          clientId: client.id,
+          memberId,
+          userId
+        })
+        
+        // Optimistically update team members
+        const member = allClients?.find(c => c.id === memberId)
+        if (member) {
+          setClient(prev => ({
+            ...prev,
+            teamMembers: [...prev.teamMembers, member]
+          }))
+        }
+      }
+      
+      // Remove team members
+      for (const memberId of membersToRemove) {
+        await removeTeamMemberMutation.mutateAsync({
+          clientId: client.id,
+          memberId,
+          userId
+        })
+        
+        // Optimistically remove from team members
+        setClient(prev => ({
+          ...prev,
+          teamMembers: prev.teamMembers.filter(tm => tm.id !== memberId),
+          teamMemberOf: prev.teamMemberOf.filter(tm => tm.id !== memberId)
+        }))
+      }
+      
+      setIsEditing(false)
+      setEditedClient(null)
+      setHasUnsavedChanges(false)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -186,9 +220,15 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
 
   // Handle dialog actions
   const handleSaveAndNavigate = async () => {
+    setShowUnsavedDialog(false)
     await handleSaveChanges()
     if (pendingNavigation) {
-      router.push(pendingNavigation)
+      toast.loading('Navigating to create new client...', { id: 'navigation' })
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        router.push(pendingNavigation)
+        toast.dismiss('navigation')
+      }, 100)
     }
   }
 
@@ -201,7 +241,12 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
 
   const handleDeleteClient = async () => {
     if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
-      await deleteMutation.mutateAsync({ id: client.id, userId })
+      setIsDeleting(true)
+      try {
+        await deleteMutation.mutateAsync({ id: client.id, userId })
+      } finally {
+        setIsDeleting(false)
+      }
     }
   }
 
@@ -225,8 +270,13 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
           </Link>
           <h2>{client.name}</h2>
         </div>
-        <Button variant="destructive" size="sm" onClick={handleDeleteClient}>
-          Delete Client
+        <Button 
+          variant="destructive" 
+          size="sm" 
+          onClick={handleDeleteClient}
+          disabled={isDeleting}
+        >
+          {isDeleting ? 'Deleting...' : 'Delete Client'}
         </Button>
       </div>
       
@@ -338,8 +388,10 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
           </CardContent>
           {isEditing && (
             <CardFooter className="px-6 py-4 border-t flex justify-end space-x-2">
-              <Button variant="outline" onClick={handleCancelEdit}>Cancel</Button>
-              <Button onClick={handleSaveChanges}>Save Changes</Button>
+              <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving}>Cancel</Button>
+              <Button onClick={handleSaveChanges} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
             </CardFooter>
           )}
           {!isEditing && (
@@ -551,8 +603,8 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
             <Button variant="outline" onClick={handleDiscardAndNavigate}>
               Discard Changes
             </Button>
-            <AlertDialogAction onClick={handleSaveAndNavigate}>
-              Save Changes
+            <AlertDialogAction onClick={handleSaveAndNavigate} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

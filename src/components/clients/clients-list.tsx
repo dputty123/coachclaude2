@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,11 +17,28 @@ export function ClientsList() {
   const { data: user } = useUser();
   const { data: clients, isLoading } = useClients(user?.id || '');
   
-  const filteredClients = clients?.filter(client => 
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (client.company?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-    (client.role?.toLowerCase().includes(searchTerm.toLowerCase()) || false)
-  ) || [];
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    
+    if (!searchTerm) return clients;
+    
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    return clients.filter(client => 
+      client.name.toLowerCase().includes(lowerSearchTerm) || 
+      (client.company?.toLowerCase().includes(lowerSearchTerm) || false) ||
+      (client.role?.toLowerCase().includes(lowerSearchTerm) || false)
+    );
+  }, [clients, searchTerm]);
+  
+  // Prefetch client pages for visible clients
+  useEffect(() => {
+    if (filteredClients.length > 0) {
+      // Prefetch the first 6 visible clients for instant navigation
+      filteredClients.slice(0, 6).forEach(client => {
+        router.prefetch(`/clients/${client.id}`);
+      });
+    }
+  }, [filteredClients, router]);
 
   return (
     <div className="space-y-6">
@@ -77,8 +94,12 @@ export function ClientsList() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map(client => (
-            <Link href={`/clients/${client.id}`} key={client.id}>
-              <Card className="h-full card-hover">
+            <Link 
+              href={`/clients/${client.id}`} 
+              key={client.id}
+              prefetch={true}
+            >
+              <Card className="h-full card-hover transition-all duration-200 hover:scale-105">
                 <CardContent className="p-6">
                   <div className="flex items-center space-x-4 mb-4">
                     <div className="w-12 h-12 rounded-full bg-coaching-100 text-coaching-600 flex items-center justify-center font-medium text-lg">
