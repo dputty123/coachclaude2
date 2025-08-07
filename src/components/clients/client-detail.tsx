@@ -14,14 +14,15 @@ import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
 import { ClientNotes } from './client-notes'
 import { useUpdateClient, useDeleteClient, useClients, useAddTeamMember, useRemoveTeamMember } from '@/hooks/use-clients'
-import type { Client, Session, ClientNote, TeamMembership } from '@/generated/prisma'
+import { getClient } from '@/app/actions/clients'
+import type { Client, Session, ClientNote } from '@/generated/prisma'
 import type { ClientFormData } from '@/hooks/use-clients'
 
 interface ClientWithRelations extends Client {
   reportsTo: Client | null
   directReports: Client[]
-  teamMembers: (TeamMembership & { member: Client })[]
-  memberOf: (TeamMembership & { team: Client })[]
+  teamMembers: Client[]
+  teamMemberOf: Client[]
   sessions: Session[]
   notes: ClientNote[]
   _count: {
@@ -61,10 +62,10 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
       keyStakeholders: client.keyStakeholders,
       reportsToId: client.reportsToId,
     })
-    // Initialize selected team members
+    // Initialize selected team members (include both directions)
     const currentTeamMembers = [
-      ...client.teamMembers.map(tm => tm.member.id),
-      ...client.memberOf.map(tm => tm.team.id)
+      ...client.teamMembers.map(tm => tm.id),
+      ...client.teamMemberOf.map(tm => tm.id)
     ]
     setSelectedTeamMembers(currentTeamMembers)
     setIsEditing(true)
@@ -85,10 +86,10 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
       userId
     })
     
-    // Handle team member changes
+    // Handle team member changes (include both directions)
     const currentTeamMembers = [
-      ...client.teamMembers.map(tm => tm.member.id),
-      ...client.memberOf.map(tm => tm.team.id)
+      ...client.teamMembers.map(tm => tm.id),
+      ...client.teamMemberOf.map(tm => tm.id)
     ]
     
     // Find members to add and remove
@@ -113,17 +114,14 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
       })
     }
     
-    // Update local state with edited data
-    setClient({
-      ...client,
-      ...editedClient
-    } as ClientWithRelations)
-    
     setIsEditing(false)
     setEditedClient(null)
     
-    // Refresh the page to get updated data
-    router.refresh()
+    // Refetch the client data to get updated relationships
+    const result = await getClient(client.id, userId)
+    if (result.success && result.data) {
+      setClient(result.data)
+    }
   }
 
   const handleDeleteClient = async () => {
@@ -373,7 +371,13 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                   <div className="space-y-2">
                     <h4 className="font-medium text-sm">Reports to</h4>
                     <div className="p-3 border rounded-md">
-                      <p>{client.reportsTo?.name || 'Not specified'}</p>
+                      {client.reportsTo ? (
+                        <span className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
+                          {client.reportsTo.name}
+                        </span>
+                      ) : (
+                        <p className="text-muted-foreground">Not specified</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -385,16 +389,16 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                   <div className="sm:col-span-2 space-y-2">
                     <h4 className="font-medium text-sm">Team Members</h4>
                     <div className="p-3 border rounded-md">
-                      {client.teamMembers.length > 0 || client.memberOf.length > 0 ? (
+                      {client.teamMembers.length > 0 || client.teamMemberOf.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {client.teamMembers.map((tm) => (
-                            <span key={tm.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
-                              {tm.member.name}
+                          {client.teamMembers.map((member) => (
+                            <span key={member.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
+                              {member.name}
                             </span>
                           ))}
-                          {client.memberOf.map((tm) => (
-                            <span key={tm.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
-                              {tm.team.name}
+                          {client.teamMemberOf.map((member) => (
+                            <span key={member.id} className="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-md">
+                              {member.name}
                             </span>
                           ))}
                         </div>

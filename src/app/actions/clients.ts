@@ -49,16 +49,8 @@ export async function getClient(id: string, userId: string) {
       include: {
         reportsTo: true,
         directReports: true,
-        teamMembers: {
-          include: {
-            member: true
-          }
-        },
-        memberOf: {
-          include: {
-            team: true
-          }
-        },
+        teamMembers: true,
+        teamMemberOf: true,
         sessions: {
           orderBy: { date: 'desc' },
           take: 10 // Limit to recent sessions for performance
@@ -200,25 +192,23 @@ export async function addTeamMember(clientId: string, memberId: string, userId: 
       return { success: false, error: 'Client not found' }
     }
 
-    // Check if relationship already exists
-    const existing = await prisma.teamMembership.findFirst({
-      where: {
-        OR: [
-          { teamId: clientId, memberId: memberId },
-          { teamId: memberId, memberId: clientId }
-        ]
-      }
+    // Check if already team members
+    const currentClient = await prisma.client.findUnique({
+      where: { id: clientId },
+      include: { teamMembers: true }
     })
 
-    if (existing) {
-      return { success: false, error: 'Team relationship already exists' }
+    if (currentClient?.teamMembers.some(tm => tm.id === memberId)) {
+      return { success: false, error: 'Already team members' }
     }
 
-    // Create bidirectional relationship
-    await prisma.teamMembership.create({
+    // Add team member (automatically bidirectional)
+    await prisma.client.update({
+      where: { id: clientId },
       data: {
-        teamId: clientId,
-        memberId: memberId
+        teamMembers: {
+          connect: { id: memberId }
+        }
       }
     })
 
@@ -243,13 +233,13 @@ export async function removeTeamMember(clientId: string, memberId: string, userI
       return { success: false, error: 'Client not found' }
     }
 
-    // Delete the relationship (either direction)
-    await prisma.teamMembership.deleteMany({
-      where: {
-        OR: [
-          { teamId: clientId, memberId: memberId },
-          { teamId: memberId, memberId: clientId }
-        ]
+    // Remove team member (automatically bidirectional)
+    await prisma.client.update({
+      where: { id: clientId },
+      data: {
+        teamMembers: {
+          disconnect: { id: memberId }
+        }
       }
     })
 

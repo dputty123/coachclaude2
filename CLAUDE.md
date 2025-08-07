@@ -1,5 +1,7 @@
 # Coach Claude Insights - Development Guidelines
 
+** IMPORTANT NOTE **: DO NOT RUN THE BUILD COMMAND UNLESS I ASK YOU TO.
+
 ## Product Specification
 
 For complete product specifications, features, and user workflows, please refer to:
@@ -42,11 +44,23 @@ This document contains:
 - Add coaching philosophy prompt configuration
 - Create prompt templates management
 
-**5. Clients Module**
+**5. Clients Module** ✅ COMPLETED
 - `/clients` - List view with client cards
-- `/clients/new` - Add new client form
-- `/clients/[id]` - Client detail page
-- CRUD operations with Prisma/Supabase
+  - Search functionality by name, company, or role
+  - Display client count and last session info
+  - "Add Client" button routes to full page form
+- `/clients/new` - Add new client form (full page, not dialog)
+  - Only name field is required
+  - All other fields optional
+  - Uses React Query for optimistic updates
+- `/clients/[id]` - Client detail page with comprehensive features:
+  - **Edit Mode**: Toggle between view/edit for all client fields
+  - **Team Members**: Bidirectional relationships with multi-select
+  - **Reports To**: Dropdown selector with "Add Client" option
+  - **Timeline Tab**: Shows sessions, notes, and resources
+  - **Notes Tab**: Create, edit, delete client notes
+  - **Real-time Updates**: Using React Query mutations
+- CRUD operations with Prisma/Supabase server actions
 
 **6. Sessions Foundation**
 - `/sessions` - Sessions list view
@@ -151,9 +165,10 @@ The Client schema has been carefully designed to handle the complex relationship
    - **Reports To**: Unidirectional relationship using simple foreign key
      - `reportsToId` links to another client who is their manager
      - `directReports` automatically gives you all subordinates
-   - **Team Members**: Bidirectional relationship using join table
-     - Uses `TeamMembership` table to handle many-to-many relationships
-     - When A adds B as team member, B automatically sees A in their team
+   - **Team Members**: Simplified bidirectional relationship using Prisma's automatic many-to-many
+     - Uses Prisma's built-in self-referencing many-to-many (no manual join table needed)
+     - When A adds B as team member, both A and B see each other automatically
+     - Prevents self-references (a client cannot be their own team member)
 
 4. **Related Data**
    - **Notes**: Multiple timestamped notes per client (ClientNote table)
@@ -170,11 +185,13 @@ The Client schema has been carefully designed to handle the complex relationship
 ### Example Usage
 
 ```typescript
-// Adding a team member relationship
-await prisma.teamMembership.create({
+// Adding a team member relationship (simplified!)
+await prisma.client.update({
+  where: { id: clientA.id },
   data: {
-    teamId: clientA.id,
-    memberId: clientB.id
+    teamMembers: {
+      connect: { id: clientB.id }
+    }
   }
 });
 
@@ -182,11 +199,100 @@ await prisma.teamMembership.create({
 const client = await prisma.client.findUnique({
   where: { id: clientId },
   include: {
-    teamMembers: { include: { member: true } },
-    memberOf: { include: { team: true } }
+    teamMembers: true,      // Clients who are team members with this client
+    teamMemberOf: true      // Same relationship from the other perspective
   }
 });
+
+// Display logic combines both for true bidirectional view
+const allTeamMembers = [...client.teamMembers, ...client.teamMemberOf];
 ```
+
+### Team Members Schema Evolution
+
+**Original Schema Issue:**
+- Used explicit `TeamMembership` join table with confusing relation names
+- `teamMembers` relation actually showed where client was the MEMBER (backwards!)
+- Led to clients seeing themselves as their own team members
+
+**New Simplified Schema:**
+```prisma
+model Client {
+  // ... other fields ...
+  
+  // Self-referencing many-to-many for team members
+  teamMembers   Client[]  @relation("TeamMembers")
+  teamMemberOf  Client[]  @relation("TeamMembers")
+}
+```
+
+**Benefits:**
+- Prisma automatically handles the join table
+- True symmetric relationship - no "direction" confusion
+- Impossible to add self as team member
+- Much cleaner code and queries
+
+## Client Module Implementation Details
+
+### Key Features Implemented:
+
+1. **Client List Page (`/clients`)**
+   - Real-time search across name, company, and role
+   - Client cards showing session count
+   - Responsive grid layout
+   - "Add Client" button (full page navigation, not dialog)
+
+2. **Client Detail Page (`/clients/[id]`)**
+   - **View Mode**: Clean display of all client information
+   - **Edit Mode**: In-place editing with save/cancel
+   - **Relationships**:
+     - Reports To: Single select with badge display
+     - Team Members: Multi-select with bidirectional display
+   - **Tabs**:
+     - Timeline: Chronological view of sessions and notes
+     - Notes: Full CRUD for client notes
+   - **Actions**: New Session, Schedule Meeting, Delete Client
+
+3. **Data Flow Architecture**
+   - Server Actions for all CRUD operations
+   - React Query for caching and optimistic updates
+   - Real-time updates without page refresh
+   - Type-safe with Prisma generated types
+
+### UI/UX Decisions:
+
+1. **Edit Pattern**: Single edit mode for all fields (not individual field editing)
+   - Consistent with user expectations
+   - Clear save/cancel flow
+   - Prevents accidental changes
+
+2. **Selectors**: Custom dropdowns with integrated "Add Client" option
+   - Appears when no clients match search
+   - Consistent behavior across all dropdowns
+   - Shows client names as badges when selected
+
+3. **Team Members Display**:
+   - Shows all team relationships (both directions)
+   - Prevents duplicate selections
+   - Clear visual feedback with badges
+
+### Technical Implementation:
+
+1. **Next.js 15 App Router**
+   - Server components for data fetching
+   - Client components only for interactivity
+   - Async params handling
+
+2. **React Query Integration**
+   - Custom hooks for each operation
+   - Optimistic updates for better UX
+   - Automatic cache invalidation
+
+3. **Type Safety**
+   - Zod schemas for validation
+   - Prisma generated types
+   - Proper error handling
+
 ### Calendar Integration Approach (MVP)
 
 **Phase 1 - Read-Only Integration:**

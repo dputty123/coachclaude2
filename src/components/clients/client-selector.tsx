@@ -68,33 +68,53 @@ export function ClientSelector({
             onValueChange={setSearchValue}
           />
           <CommandEmpty>
-            <div className="p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-2">
-                No client found.
-              </p>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setOpen(false)
-                  router.push('/clients/new')
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add New Client
-              </Button>
-            </div>
+            {availableClients.length > 0 && (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  No client found.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push('/clients/new')
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Client
+                </Button>
+              </div>
+            )}
           </CommandEmpty>
           <CommandGroup>
-            <CommandItem
-              value=""
-              onSelect={() => {
-                onChange(null)
-                setOpen(false)
-              }}
-            >
-              <span className="text-muted-foreground">None</span>
-            </CommandItem>
-            {availableClients.map((client) => (
+            {availableClients.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  No clients available.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push('/clients/new')
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Client
+                </Button>
+              </div>
+            ) : (
+              <>
+                <CommandItem
+                  value=""
+                  onSelect={() => {
+                    onChange(null)
+                    setOpen(false)
+                  }}
+                >
+                  <span className="text-muted-foreground">None</span>
+                </CommandItem>
+                {availableClients.map((client) => (
               <CommandItem
                 key={client.id}
                 value={client.name}
@@ -117,6 +137,8 @@ export function ClientSelector({
                 </div>
               </CommandItem>
             ))}
+              </>
+            )}
           </CommandGroup>
         </Command>
       </PopoverContent>
@@ -171,7 +193,9 @@ export function MultiClientSelector({
         >
           <span className="truncate">
             {selectedClients.length > 0
-              ? `${selectedClients.length} team member${selectedClients.length > 1 ? 's' : ''} selected`
+              ? selectedClients.length <= 2
+                ? selectedClients.map(c => c.name).join(', ')
+                : `${selectedClients[0].name} + ${selectedClients.length - 1} more`
               : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -185,24 +209,43 @@ export function MultiClientSelector({
             onValueChange={setSearchValue}
           />
           <CommandEmpty>
-            <div className="p-4 text-center">
-              <p className="text-sm text-muted-foreground mb-2">
-                No client found.
-              </p>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setOpen(false)
-                  router.push('/clients/new')
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add New Client
-              </Button>
-            </div>
+            {availableClients.length > 0 && (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  No client found.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push('/clients/new')
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Client
+                </Button>
+              </div>
+            )}
           </CommandEmpty>
           <CommandGroup>
-            {availableClients.map((client) => (
+            {availableClients.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  No clients available.
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push('/clients/new')
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Client
+                </Button>
+              </div>
+            ) : (
+              availableClients.map((client) => (
               <CommandItem
                 key={client.id}
                 value={client.name}
@@ -221,7 +264,8 @@ export function MultiClientSelector({
                   )}
                 </div>
               </CommandItem>
-            ))}
+            ))
+            )}
           </CommandGroup>
         </Command>
       </PopoverContent>
