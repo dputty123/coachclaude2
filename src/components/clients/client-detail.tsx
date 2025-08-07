@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
@@ -10,6 +10,16 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Calendar, MessageSquare } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
 import { ClientNotes } from './client-notes'
@@ -41,6 +51,9 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const [isEditing, setIsEditing] = useState(false)
   const [editedClient, setEditedClient] = useState<ClientFormData | null>(null)
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([])
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
   
   const { data: allClients } = useClients(userId)
   const updateMutation = useUpdateClient()
@@ -74,6 +87,7 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const handleCancelEdit = () => {
     setEditedClient(null)
     setIsEditing(false)
+    setHasUnsavedChanges(false)
   }
 
   const handleSaveChanges = async () => {
@@ -116,11 +130,72 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
     
     setIsEditing(false)
     setEditedClient(null)
+    setHasUnsavedChanges(false)
     
     // Refetch the client data to get updated relationships
     const result = await getClient(client.id, userId)
     if (result.success && result.data) {
       setClient(result.data)
+    }
+  }
+
+  // Check if form has unsaved changes
+  const checkForUnsavedChanges = useCallback(() => {
+    if (!isEditing || !editedClient) return false
+    
+    // Check basic fields
+    const basicFieldsChanged = 
+      editedClient.name !== client.name ||
+      editedClient.role !== client.role ||
+      editedClient.company !== client.company ||
+      editedClient.email !== client.email ||
+      editedClient.phone !== client.phone ||
+      editedClient.careerGoal !== client.careerGoal ||
+      editedClient.keyChallenge !== client.keyChallenge ||
+      editedClient.keyStakeholders !== client.keyStakeholders ||
+      editedClient.reportsToId !== client.reportsToId ||
+      editedClient.birthday !== (client.birthday ? new Date(client.birthday).toISOString().split('T')[0] : '') ||
+      editedClient.coachingSince !== (client.coachingSince ? new Date(client.coachingSince).toISOString().split('T')[0] : '')
+    
+    // Check team members
+    const currentTeamMembers = [
+      ...client.teamMembers.map(tm => tm.id),
+      ...client.teamMemberOf.map(tm => tm.id)
+    ]
+    const teamMembersChanged = 
+      selectedTeamMembers.length !== currentTeamMembers.length ||
+      !selectedTeamMembers.every(id => currentTeamMembers.includes(id))
+    
+    return basicFieldsChanged || teamMembersChanged
+  }, [isEditing, editedClient, client, selectedTeamMembers])
+
+  // Update hasUnsavedChanges when form changes
+  useEffect(() => {
+    setHasUnsavedChanges(checkForUnsavedChanges())
+  }, [checkForUnsavedChanges])
+
+  // Handle navigation with unsaved changes
+  const handleNavigationWithUnsavedChanges = (url: string) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(url)
+      setShowUnsavedDialog(true)
+    } else {
+      router.push(url)
+    }
+  }
+
+  // Handle dialog actions
+  const handleSaveAndNavigate = async () => {
+    await handleSaveChanges()
+    if (pendingNavigation) {
+      router.push(pendingNavigation)
+    }
+  }
+
+  const handleDiscardAndNavigate = () => {
+    setShowUnsavedDialog(false)
+    if (pendingNavigation) {
+      router.push(pendingNavigation)
     }
   }
 
@@ -344,6 +419,7 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                       onChange={(value) => setEditedClient({...editedClient, reportsToId: value})}
                       placeholder="Select manager..."
                       excludeId={client.id}
+                      onNavigateToNewClient={() => handleNavigationWithUnsavedChanges('/clients/new')}
                     />
                   </div>
                   <div className="space-y-2">
@@ -354,6 +430,7 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                       onChange={setSelectedTeamMembers}
                       placeholder="Select team members..."
                       excludeId={client.id}
+                      onNavigateToNewClient={() => handleNavigationWithUnsavedChanges('/clients/new')}
                     />
                   </div>
                   <div className="space-y-2">
@@ -431,6 +508,26 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
                     clientId={client.id}
                     userId={userId}
                     notes={client.notes}
+                    onNoteCreated={(note) => {
+                      setClient(prev => ({
+                        ...prev,
+                        notes: [note, ...prev.notes]
+                      }))
+                    }}
+                    onNoteUpdated={(updatedNote) => {
+                      setClient(prev => ({
+                        ...prev,
+                        notes: prev.notes.map(note => 
+                          note.id === updatedNote.id ? updatedNote : note
+                        )
+                      }))
+                    }}
+                    onNoteDeleted={(noteId) => {
+                      setClient(prev => ({
+                        ...prev,
+                        notes: prev.notes.filter(note => note.id !== noteId)
+                      }))
+                    }}
                   />
                 </CardContent>
               </Card>
@@ -438,6 +535,28 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
           </Tabs>
         </div>
       </div>
+
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Do you want to save them before leaving?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowUnsavedDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <Button variant="outline" onClick={handleDiscardAndNavigate}>
+              Discard Changes
+            </Button>
+            <AlertDialogAction onClick={handleSaveAndNavigate}>
+              Save Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

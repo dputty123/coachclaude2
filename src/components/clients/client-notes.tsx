@@ -13,9 +13,12 @@ interface ClientNotesProps {
   clientId: string
   userId: string
   notes: ClientNote[]
+  onNoteCreated?: (note: ClientNote) => void
+  onNoteUpdated?: (note: ClientNote) => void
+  onNoteDeleted?: (noteId: string) => void
 }
 
-export function ClientNotes({ clientId, userId, notes }: ClientNotesProps) {
+export function ClientNotes({ clientId, userId, notes, onNoteCreated, onNoteUpdated, onNoteDeleted }: ClientNotesProps) {
   const [isAddingNote, setIsAddingNote] = useState(false)
   const [editingNote, setEditingNote] = useState<ClientNote | null>(null)
   const [noteContent, setNoteContent] = useState('')
@@ -27,11 +30,15 @@ export function ClientNotes({ clientId, userId, notes }: ClientNotesProps) {
   const handleAddNote = async () => {
     if (!noteContent.trim()) return
     
-    await createNoteMutation.mutateAsync({
+    const note = await createNoteMutation.mutateAsync({
       clientId,
       content: noteContent,
       userId
     })
+    
+    if (note && onNoteCreated) {
+      onNoteCreated(note)
+    }
     
     setNoteContent('')
     setIsAddingNote(false)
@@ -40,12 +47,16 @@ export function ClientNotes({ clientId, userId, notes }: ClientNotesProps) {
   const handleUpdateNote = async () => {
     if (!editingNote || !noteContent.trim()) return
     
-    await updateNoteMutation.mutateAsync({
+    const updatedNote = await updateNoteMutation.mutateAsync({
       noteId: editingNote.id,
       content: noteContent,
       userId,
       clientId
     })
+    
+    if (updatedNote && onNoteUpdated) {
+      onNoteUpdated(updatedNote)
+    }
     
     setNoteContent('')
     setEditingNote(null)
@@ -59,6 +70,10 @@ export function ClientNotes({ clientId, userId, notes }: ClientNotesProps) {
       userId,
       clientId
     })
+    
+    if (onNoteDeleted) {
+      onNoteDeleted(noteId)
+    }
   }
 
   const formatDate = (date: Date | string) => {

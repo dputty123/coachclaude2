@@ -26,6 +26,7 @@ interface ClientSelectorProps {
   placeholder?: string
   disabled?: boolean
   excludeId?: string // Exclude a client from the list (e.g., current client)
+  onNavigateToNewClient?: () => void // Optional callback for custom navigation
 }
 
 export function ClientSelector({
@@ -34,7 +35,8 @@ export function ClientSelector({
   onChange,
   placeholder = 'Select a client...',
   disabled = false,
-  excludeId
+  excludeId,
+  onNavigateToNewClient
 }: ClientSelectorProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
@@ -77,7 +79,11 @@ export function ClientSelector({
                   size="sm"
                   onClick={() => {
                     setOpen(false)
-                    router.push('/clients/new')
+                    if (onNavigateToNewClient) {
+                      onNavigateToNewClient()
+                    } else {
+                      router.push('/clients/new')
+                    }
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -96,7 +102,11 @@ export function ClientSelector({
                   size="sm"
                   onClick={() => {
                     setOpen(false)
-                    router.push('/clients/new')
+                    if (onNavigateToNewClient) {
+                      onNavigateToNewClient()
+                    } else {
+                      router.push('/clients/new')
+                    }
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -153,6 +163,7 @@ interface MultiClientSelectorProps {
   placeholder?: string
   disabled?: boolean
   excludeId?: string
+  onNavigateToNewClient?: () => void // Optional callback for custom navigation
 }
 
 export function MultiClientSelector({
@@ -161,7 +172,8 @@ export function MultiClientSelector({
   onChange,
   placeholder = 'Select team members...',
   disabled = false,
-  excludeId
+  excludeId,
+  onNavigateToNewClient
 }: MultiClientSelectorProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
@@ -218,7 +230,11 @@ export function MultiClientSelector({
                   size="sm"
                   onClick={() => {
                     setOpen(false)
-                    router.push('/clients/new')
+                    if (onNavigateToNewClient) {
+                      onNavigateToNewClient()
+                    } else {
+                      router.push('/clients/new')
+                    }
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -237,7 +253,11 @@ export function MultiClientSelector({
                   size="sm"
                   onClick={() => {
                     setOpen(false)
-                    router.push('/clients/new')
+                    if (onNavigateToNewClient) {
+                      onNavigateToNewClient()
+                    } else {
+                      router.push('/clients/new')
+                    }
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
