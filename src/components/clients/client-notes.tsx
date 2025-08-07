@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { Edit2, Trash2, Plus } from 'lucide-react'
 import { useCreateClientNote, useUpdateClientNote, useDeleteClientNote } from '@/hooks/use-clients'
 import type { ClientNote } from '@/generated/prisma'
@@ -22,6 +23,8 @@ export function ClientNotes({ clientId, userId, notes, onNoteCreated, onNoteUpda
   const [isAddingNote, setIsAddingNote] = useState(false)
   const [editingNote, setEditingNote] = useState<ClientNote | null>(null)
   const [noteContent, setNoteContent] = useState('')
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [isDeletingNote, setIsDeletingNote] = useState(false)
   
   const createNoteMutation = useCreateClientNote()
   const updateNoteMutation = useUpdateClientNote()
@@ -62,17 +65,25 @@ export function ClientNotes({ clientId, userId, notes, onNoteCreated, onNoteUpda
     setEditingNote(null)
   }
 
-  const handleDeleteNote = async (noteId: string) => {
-    if (!confirm('Are you sure you want to delete this note?')) return
+  const handleDeleteNote = async () => {
+    if (!deletingNoteId) return
     
-    await deleteNoteMutation.mutateAsync({
-      noteId,
-      userId,
-      clientId
-    })
-    
-    if (onNoteDeleted) {
-      onNoteDeleted(noteId)
+    setIsDeletingNote(true)
+    try {
+      await deleteNoteMutation.mutateAsync({
+        noteId: deletingNoteId,
+        userId,
+        clientId
+      })
+      
+      if (onNoteDeleted) {
+        onNoteDeleted(deletingNoteId)
+      }
+      
+      setDeletingNoteId(null)
+    } catch {
+      // Error is handled by the mutation
+      setIsDeletingNote(false)
     }
   }
 
@@ -124,7 +135,7 @@ export function ClientNotes({ clientId, userId, notes, onNoteCreated, onNoteUpda
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => handleDeleteNote(note.id)}
+                      onClick={() => setDeletingNoteId(note.id)}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -207,6 +218,16 @@ export function ClientNotes({ clientId, userId, notes, onNoteCreated, onNoteUpda
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmationDialog
+        open={!!deletingNoteId}
+        onOpenChange={(open) => !open && setDeletingNoteId(null)}
+        onConfirm={handleDeleteNote}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        confirmText="Delete Note"
+        isDeleting={isDeletingNote}
+      />
     </>
   )
 }

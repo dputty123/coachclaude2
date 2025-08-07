@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
 import { ClientNotes } from './client-notes'
@@ -56,6 +57,7 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   
   const { data: allClients } = useClients(userId)
   const updateMutation = useUpdateClient()
@@ -240,13 +242,13 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   }
 
   const handleDeleteClient = async () => {
-    if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
-      setIsDeleting(true)
-      try {
-        await deleteMutation.mutateAsync({ id: client.id, userId })
-      } finally {
-        setIsDeleting(false)
-      }
+    setIsDeleting(true)
+    try {
+      await deleteMutation.mutateAsync({ id: client.id, userId })
+      setShowDeleteDialog(false)
+    } catch {
+      // Error is handled by the mutation
+      setIsDeleting(false)
     }
   }
 
@@ -273,10 +275,9 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
         <Button 
           variant="destructive" 
           size="sm" 
-          onClick={handleDeleteClient}
-          disabled={isDeleting}
+          onClick={() => setShowDeleteDialog(true)}
         >
-          {isDeleting ? 'Deleting...' : 'Delete Client'}
+          Delete Client
         </Button>
       </div>
       
@@ -609,6 +610,16 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteConfirmationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={handleDeleteClient}
+        title="Delete Client"
+        description={`Are you sure you want to delete ${client.name}? This will permanently delete the client and all associated sessions, notes, and data.`}
+        confirmText="Delete Client"
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

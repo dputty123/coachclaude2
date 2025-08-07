@@ -2,6 +2,20 @@
 
 ** IMPORTANT NOTE **: DO NOT RUN THE BUILD COMMAND UNLESS I ASK YOU TO.
 
+## IMPORTANT: Component Organization Rules
+
+1. **UI Folder (`/components/ui/`)**: 
+   - ONLY for shadcn/ui components
+   - Do NOT create custom components here
+   - This folder is reserved for components installed via `npx shadcn-ui@latest add`
+
+2. **Components Folder (`/components/`)**: 
+   - For ALL custom components
+   - Examples: PasswordInput, DeleteConfirmationDialog, etc.
+   - Organize by feature (e.g., `/components/clients/`, `/components/sessions/`)
+
+3. **Remember**: If you're creating a new component that's not from shadcn/ui, it goes in `/components/`, NOT `/components/ui/`
+
 ## Product Specification
 
 For complete product specifications, features, and user workflows, please refer to:
