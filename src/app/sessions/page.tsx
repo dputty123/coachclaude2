@@ -1,13 +1,17 @@
 import { SessionList } from "@/components/sessions/session-list";
+import { getUserServer } from '@/app/actions/user';
+import { notFound } from 'next/navigation';
 
-// Server Component - no "use client" needed
-// In a real app, we could fetch sessions data here:
-// const sessions = await getSessionsFromSupabase();
-
-export default function SessionsPage() {
+export default async function SessionsPage() {
+  const user = await getUserServer();
+  
+  if (!user) {
+    notFound();
+  }
+  
   return (
     <div className="animate-in">
-      <SessionList />
+      <SessionList userId={user.id} />
     </div>
   );
 }

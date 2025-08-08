@@ -15,6 +15,8 @@
    - Organize by feature (e.g., `/components/clients/`, `/components/sessions/`)
 
 3. **Remember**: If you're creating a new component that's not from shadcn/ui, it goes in `/components/`, NOT `/components/ui/`
+   
+4. **Remember**: Use React Query with optimistic updates wherever possible!
 
 ## Product Specification
 
