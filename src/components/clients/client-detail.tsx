@@ -4,13 +4,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { usePrepareForSession } from '@/hooks/use-session-ai'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Calendar, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Calendar, MessageSquare, Sparkles, Copy, Check } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { ClientTimeline } from './client-timeline'
 import { ClientSelector, MultiClientSelector } from './client-selector'
@@ -59,12 +68,16 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showPreparationDialog, setShowPreparationDialog] = useState(false)
+  const [preparationNotes, setPreparationNotes] = useState<string | null>(null)
+  const [copiedPreparation, setCopiedPreparation] = useState(false)
   
   const { data: allClients } = useClients(userId)
   const updateMutation = useUpdateClient()
   const deleteMutation = useDeleteClient()
   const addTeamMemberMutation = useAddTeamMember()
   const removeTeamMemberMutation = useRemoveTeamMember()
+  const prepareForSession = usePrepareForSession()
 
   const handleStartEditing = () => {
     setEditedClient({
@@ -252,6 +265,32 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
       setIsDeleting(false)
     }
   }
+  
+  const handlePrepareForSession = async () => {
+    const result = await prepareForSession.mutateAsync({ 
+      clientId: client.id, 
+      userId 
+    })
+    
+    if (result?.success && result?.data?.preparationNotes) {
+      setPreparationNotes(result.data.preparationNotes)
+      setShowPreparationDialog(true)
+      setCopiedPreparation(false)
+    }
+  }
+  
+  const handleCopyPreparation = async () => {
+    if (!preparationNotes) return
+    
+    try {
+      await navigator.clipboard.writeText(preparationNotes)
+      setCopiedPreparation(true)
+      toast.success('Preparation notes copied to clipboard')
+      setTimeout(() => setCopiedPreparation(false), 2000)
+    } catch {
+      toast.error('Failed to copy to clipboard')
+    }
+  }
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return 'Not specified'
@@ -408,6 +447,24 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
               <div className="flex flex-col space-y-2 w-full">
                 <Button className="w-full" onClick={() => router.push(`/sessions/new?clientId=${client.id}`)}>
                   <MessageSquare className="h-4 w-4 mr-2" /> New Session
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={handlePrepareForSession}
+                  disabled={prepareForSession.isPending}
+                >
+                  {prepareForSession.isPending ? (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Prepare for Session
+                    </>
+                  )}
                 </Button>
                 <Button variant="outline" className="w-full">
                   <Calendar className="h-4 w-4 mr-2" /> Schedule Meeting
@@ -634,6 +691,49 @@ export function ClientDetail({ client: initialClient, userId }: ClientDetailProp
         confirmText="Delete Client"
         isDeleting={isDeleting}
       />
+      
+      <Dialog open={showPreparationDialog} onOpenChange={setShowPreparationDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Session Preparation Notes
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated insights to help you prepare for your next session with {client.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+            <div className="whitespace-pre-wrap">
+              {preparationNotes}
+            </div>
+          </ScrollArea>
+          
+          <div className="flex justify-between pt-4">
+            <Button
+              variant="outline"
+              onClick={handleCopyPreparation}
+              className="flex items-center gap-2"
+            >
+              {copiedPreparation ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copy to Clipboard
+                </>
+              )}
+            </Button>
+            <Button onClick={() => setShowPreparationDialog(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

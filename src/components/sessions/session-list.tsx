@@ -153,18 +153,11 @@ export function SessionList({ userId }: SessionListProps) {
                     )}
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <Link href={`/sessions/${session.id}`} className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full">
-                      {session.analysis ? 'View Details' : 'View Session'}
-                    </Button>
-                  </Link>
-                  {!session.analysis && session.transcript && (
-                    <Button variant="default" size="sm" disabled className="flex-1">
-                      Analyze
-                    </Button>
-                  )}
-                </div>
+                <Link href={`/sessions/${session.id}`} className="w-full">
+                  <Button variant="outline" size="sm" className="w-full">
+                    View Session
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           ))

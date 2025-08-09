@@ -17,11 +17,13 @@ import {
   Trash2,
   Sparkles,
   Copy,
-  Check
+  Check,
+  RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { useDeleteSession } from '@/hooks/use-sessions'
+import { useAnalyzeSession, useReanalyzeSession } from '@/hooks/use-session-ai'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { toast } from 'sonner'
 
@@ -68,6 +70,8 @@ export function SessionDetail({ session, userId }: SessionDetailProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   
   const deleteSession = useDeleteSession()
+  const analyzeSession = useAnalyzeSession()
+  const reanalyzeSession = useReanalyzeSession()
   
   const handleDelete = async () => {
     setIsDeleting(true)
@@ -77,6 +81,14 @@ export function SessionDetail({ session, userId }: SessionDetailProps) {
     } catch {
       setIsDeleting(false)
     }
+  }
+  
+  const handleAnalyze = async () => {
+    await analyzeSession.mutateAsync({ sessionId: session.id, userId })
+  }
+  
+  const handleReanalyze = async () => {
+    await reanalyzeSession.mutateAsync({ sessionId: session.id, userId })
   }
   
   const handleCopyEmail = () => {
@@ -89,6 +101,7 @@ export function SessionDetail({ session, userId }: SessionDetailProps) {
   }
   
   const hasAnalysis = session.summary || session.followUpEmail || session.analysis
+  const isAnalyzing = analyzeSession.isPending || reanalyzeSession.isPending
   
   return (
     <div className="space-y-6">
@@ -248,9 +261,21 @@ export function SessionDetail({ session, userId }: SessionDetailProps) {
                   This session has a transcript and can be analyzed to generate insights, 
                   summary, and follow-up email.
                 </p>
-                <Button disabled>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Analyze Session (Coming Soon)
+                <Button 
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing}
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Analyze Session
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
@@ -281,7 +306,27 @@ export function SessionDetail({ session, userId }: SessionDetailProps) {
           <TabsContent value="analysis" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Session Analysis</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Session Analysis</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReanalyze}
+                    disabled={isAnalyzing}
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                        Re-analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Re-analyze
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {session.analysis ? (
